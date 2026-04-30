@@ -1,0 +1,24 @@
+# Ambiente Virtual
+venv/
+.venv/
+env/
+
+# Bancos de Dados SQLite (gerados automaticamente pelo app.py na primeira execução)
+*.db
+*.sqlite
+*.sqlite3
+
+# Cache Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Arquivos de sistema
+.DS_Store
+Thumbs.db
+
+# Scripts de patch (não fazem parte da distribuição final)
+scripts_and_patches/
+
+# Ícone gerado/temporário (opcional — remova esta linha se quiser versionar o ícone)
+# app_icon.png
