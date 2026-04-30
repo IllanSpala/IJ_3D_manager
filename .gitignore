@@ -22,3 +22,8 @@ scripts_and_patches/
 
 # Ícone gerado/temporário (opcional — remova esta linha se quiser versionar o ícone)
 # app_icon.png
+
+# Mídias e Backups locais
+src/
+src_media/
+*.zip

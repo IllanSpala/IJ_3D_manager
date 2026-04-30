@@ -80,9 +80,16 @@ python3 app.py
 IJ-3D-Manager/
 ├── app.py              # Código-fonte principal da aplicação
 ├── requirements.txt    # Manifesto de dependências Python
-├── .gitignore          # Exclui venv/, *.db e outros arquivos gerados
+├── .gitignore          # Exclui venv/, *.db, src_media/, e backups
 ├── app_icon.png        # Ícone da aplicação (opcional)
 └── README.md           # Este guia
 ```
 
-> Os arquivos `*.db` (banco de dados SQLite) são **gerados localmente** e **não fazem parte do repositório**. Cada instalação cria e mantém seu próprio banco de dados de operação.
+> Os arquivos `*.db` (banco de dados SQLite) e a pasta `src_media/` (fotos e notas fiscais) são **gerados localmente** e **não fazem parte do repositório**. Cada instalação mantém seus próprios dados locais.
+
+---
+
+## 6. Sincronização entre Notebook e PC (Backup)
+
+O sistema agora possui um recurso integrado de **Exportar/Importar Banco de Dados e Mídias** na barra lateral.
+Isso permite que você gere um único arquivo `.zip` com tudo (seu banco de dados `print_manager_v2.db` e todas as fotos da pasta `src_media`) para transferir via pen drive ou nuvem entre o seu Notebook e o seu PC, mantendo o ambiente exato em ambas as máquinas.
