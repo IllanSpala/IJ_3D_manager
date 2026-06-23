@@ -1,8 +1,14 @@
-# IJ 3D Manager
+# IJ 3D Manager — Windows Desktop
+
+![Platform](https://img.shields.io/badge/platform-Windows-0078D6?style=flat-square&logo=windows)
+![Python](https://img.shields.io/badge/python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)
 
 Sistema ERP pessoal para gestão de impressão 3D — Bambu Lab A1 e compatíveis.
 
 Desenvolvido em **Python 3.11+** com **CustomTkinter**, banco de dados **SQLite** local e empacotamento via **PyInstaller**.
+
+> ⚠️ **Este repositório gera exclusivamente o executável Windows (.exe).**
+> Para a versão Web (visualização via navegador), consulte o repositório **[IJ_3D_web](https://github.com/seu-usuario/IJ_3D_web)**.
 
 ---
 
@@ -21,7 +27,7 @@ Desenvolvido em **Python 3.11+** com **CustomTkinter**, banco de dados **SQLite*
 - Parâmetros de fatiamento por peça (texto livre)
 - Link de compra / referência
 
-### 🗂 Histórico de Impressões *(novo)*
+### 🗂 Histórico de Impressões
 - Tabela completa de todas as sessões de impressão registradas
 - Colunas: Data · Peça · Status · Filamento(s) · Purga (g) · Modelo (g) · Total (g) · Conf. Fatiador · Arquivo 3D · **Preço de Venda (R$)** · Observação
 - Filtro por nome de peça/filamento e por status
@@ -44,7 +50,7 @@ Desenvolvido em **Python 3.11+** com **CustomTkinter**, banco de dados **SQLite*
 - Modo avulso: teste sem peça cadastrada
 - Salvar teste diretamente no Acervo
 
-### ⚙ Filamentos / Almoxarifado / Manutenção
+### ⚙ Almoxarifado / Manutenção
 - Inventário de ferramentas e insumos
 - Checklist de manutenção preventiva com intervalos configuráveis
 
@@ -62,23 +68,11 @@ Permite, **diretamente do Windows** (sem abrir o app):
 
 **Pré-requisitos:**
 - Python 3.x instalado e no `PATH`
-- Banco de dados acessível (detectado automaticamente no `%APPDATA%\IJ3DManager\` ou na pasta do `.exe`)
+- Banco de dados acessível (detectado automaticamente na pasta do `.exe`)
 
 ---
 
-## Instalação e Execução
-
-### Linux / macOS
-
-```bash
-git clone https://github.com/seu-usuario/IJ_3D_manager.git
-cd IJ_3D_manager
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-python app.py
-```
-
-### Windows
+## Instalação e Execução (Desenvolvimento)
 
 ```bat
 git clone https://github.com/seu-usuario/IJ_3D_manager.git
@@ -92,19 +86,13 @@ python app.py
 
 ## Empacotamento (PyInstaller)
 
-### Linux
-```bash
-bash build_executable.sh
-```
-
-### Windows
 ```bat
 build_executable.bat
 ```
 
-O executável final ficará em `dist/IJ-3D-Manager` (Linux) ou `dist/IJ-3D-Manager.exe` (Windows).
+O executável final ficará em `dist\IJ-3D-Manager.exe`.
 
-> **Dados do usuário** (banco de dados e mídias) são salvos em `%APPDATA%\IJ3DManager\` (Windows) ou `~/.local/share/IJ3DManager/` (Linux), fora da pasta do executável.
+> **Dados do usuário** (banco de dados e mídias) são salvos ao lado do executável na primeira execução.
 
 ---
 
@@ -114,9 +102,7 @@ O executável final ficará em `dist/IJ-3D-Manager` (Linux) ou `dist/IJ-3D-Manag
 IJ_3D_manager/
 ├── app.py                  # Ponto de entrada, sidebar e navegação
 ├── requirements.txt
-├── build_executable.sh     # Build Linux (PyInstaller)
 ├── build_executable.bat    # Build Windows (PyInstaller)
-├── IJ-3D-Manager.spec      # Spec PyInstaller
 │
 ├── core/
 │   ├── database.py         # Schema SQLite, migrações automáticas
@@ -124,6 +110,7 @@ IJ_3D_manager/
 │   ├── modals.py           # DetalhesModal (acervo + filamentos)
 │   ├── paths.py            # Resolução de caminhos (dev vs frozen)
 │   ├── utils.py            # Helpers de imagem, mídia, cores
+│   ├── db_worker.py        # Worker thread para operações DB pesadas
 │   └── widgets.py          # ModernCard, InlineEdit, HorizontalInventoryCard
 │
 ├── tabs/
@@ -132,8 +119,9 @@ IJ_3D_manager/
 │   ├── almoxarifado.py     # Aba de ferramentas e insumos
 │   ├── kits.py             # Aba de kits
 │   ├── pedidos.py          # Aba de pedidos (Kanban)
-│   ├── historico.py        # Aba de histórico de impressões ← NOVO
+│   ├── historico.py        # Aba de histórico de impressões
 │   ├── financeiro.py       # Calculadora financeira
+│   ├── sumario.py          # Sumário / balanço financeiro
 │   └── manutencao.py       # Aba de manutenção preventiva
 │
 └── tools/
@@ -154,6 +142,7 @@ SQLite local. Principais tabelas:
 | `acervo_filamentos` | Vínculo peça ↔ filamento com pesos |
 | `acervo_impressoes` | Histórico de sessões (+ status, preço venda, obs) |
 | `acervo_fotos_extras` | Galeria de prints do fatiador |
+| `hist_impressoes` / `hist_filamentos` / `hist_fotos` | Histórico geral de impressões |
 | `kits_acervo` / `kit_itens` | Kits de peças |
 | `pedidos_v2` / `pedidos_itens` | Pedidos de clientes |
 | `ferramentas_insumos` | Almoxarifado |
@@ -164,11 +153,14 @@ Migrações são aplicadas automaticamente ao iniciar o app — nenhuma ação m
 
 ---
 
-## Backup
+## Backup e Integração com a Versão Web
 
 Use os botões da barra lateral:
 - 💾 **Exportar Backup** — gera `.zip` com DB + mídias
 - 📂 **Importar Backup** — restaura `.zip` (sobrescreve dados atuais)
+
+> O arquivo `.zip` exportado é compatível com a **versão Web** do IJ 3D Manager.
+> Basta fazer o upload do backup na versão Web para visualizar seus dados no navegador.
 
 ---
 

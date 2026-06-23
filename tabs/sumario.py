@@ -419,7 +419,8 @@ class TabSumario(ctk.CTkFrame):
 
             # ── 2. Receitas: pedidos entregues ────────────────────────────
             pedidos = conn.execute(
-                "SELECT id, nome_cliente, data_entrega, valor_cobrado FROM pedidos_v2"
+                "SELECT id, nome_cliente, data_entrega, valor_cobrado FROM pedidos_v2 "
+                "WHERE status='Finalizado' AND valor_cobrado IS NOT NULL AND valor_cobrado > 0"
             ).fetchall()
             for p in pedidos:
                 iso = _parse_date(p[2])  # data_entrega

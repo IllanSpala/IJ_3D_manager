@@ -55,12 +55,9 @@ class App(ctk.CTk):
 
         def _try_maximize():
             try:
-                self.state('zoomed')
+                self.state('zoomed')          # Windows — único alvo
             except Exception:
-                try:
-                    self.attributes('-zoomed', True)
-                except Exception:
-                    pass
+                pass
         self.after(100, _try_maximize)
 
         self.configure(fg_color=APP_BG_COLOR)

@@ -673,6 +673,10 @@ class TabHistorico(ctk.CTkFrame):
             af = ctk.CTkFrame(t, fg_color=bg, corner_radius=0)
             af.grid(row=gr, column=7, sticky="nsew", padx=1, pady=0)
             hid = d["id"]
+            ctk.CTkButton(af, text="❓", width=28, height=26,
+                          fg_color="#3d4f7a", hover_color="#4d6f9a",
+                          font=ctk.CTkFont(size=13),
+                          command=lambda item=d: self._show_duvida(item)).pack(side="left", padx=2, pady=4)
             ctk.CTkButton(af, text="Detalhes", width=68, height=26,
                           fg_color="#2d3a5c", hover_color="#3d4f7a",
                           font=ctk.CTkFont(size=11),
@@ -693,6 +697,16 @@ class TabHistorico(ctk.CTkFrame):
             ctk.CTkLabel(ef, text="Nenhum histórico encontrado.",
                          font=ctk.CTkFont(size=14), text_color="#555").pack()
             self._data_rows.append([ef])
+
+    def _show_duvida(self, d):
+        tempo = d['tempo'] if d['tempo'] else 'Não informado'
+        msg = f"Tempo Total de Impressão: {tempo}\n\nUso de Filamentos:\n"
+        if not d['fil_data']:
+            msg += "Nenhum filamento registrado."
+        else:
+            for fd in d['fil_data']:
+                msg += f"- {fd['nome']}: Modelo {fd['mod']}g, Purga {fd['pur']}g, Torre {fd['tor']}g\n"
+        messagebox.showinfo("Detalhes de Consumo", msg, parent=self.winfo_toplevel())
 
     def _show_detalhes(self, hid):
         """Abre um modal de leitura com os dados textuais longos da impressão."""
