@@ -1,7 +1,6 @@
 import os
 import sys
 import time
-import signal
 import zipfile
 from pathlib import Path
 import tkinter as tk
@@ -18,7 +17,6 @@ from tabs.pedidos import TabPedidos
 from tabs.financeiro import TabFinanceiro
 from tabs.kits import TabKits
 from tabs.historico import TabHistorico
-from tabs.sumario import TabSumario
 
 ctk.set_appearance_mode("dark")
 # Icon is a read-only bundled asset — use BUNDLE_DIR so it resolves
@@ -30,15 +28,24 @@ class App(ctk.CTk):
         super().__init__()
         self.title("IJ 3D - Refactored")
 
-        # ── Escala estática: 1.0 imutável ────────────────────────────────
-        # Escala dinâmica baseada em resolução foi removida por causar
-        # degradação de performance no arranque. Valor fixo e definitivo.
-        ctk.set_widget_scaling(1.0)
-        ctk.set_window_scaling(1.0)
-
+        # ── Resolução adaptativa ──────────────────────────────────────────
+        # Lê a resolução REAL do monitor antes de configurar qualquer coisa
         self.update_idletasks()
         sw = self.winfo_screenwidth()
         sh = self.winfo_screenheight()
+
+        # Escala global do CustomTkinter baseada na altura da tela
+        # 768p → 1.0 | 1080p → 1.1 | 1440p → 1.3 | 4K(2160p) → 1.6
+        if sh >= 2000:
+            ui_scale = 1.6
+        elif sh >= 1400:
+            ui_scale = 1.3
+        elif sh >= 1000:
+            ui_scale = 1.1
+        else:
+            ui_scale = 1.0
+        ctk.set_widget_scaling(ui_scale)
+        ctk.set_window_scaling(ui_scale)
 
         # Janela começa maximizada
         self.geometry(f"{sw}x{sh}+0+0")
@@ -83,10 +90,9 @@ class App(ctk.CTk):
             (2,  "📦", lambda: self._swap(TabAlmoxarifado)),
             (3,  "📚", lambda: self._swap(TabAcervo)),
             (4,  "🎺", lambda: self._swap(TabKits)),
-            (5,  "📋", lambda: self._swap(TabPedidos)),
-            (6,  "📜", lambda: self._swap(TabHistorico)),
+            (5,  "📝", lambda: self._swap(TabPedidos)),
+            (6,  "🗂", lambda: self._swap(TabHistorico)),
             (7,  "💰", lambda: self._swap(TabFinanceiro)),
-            (8,  "📊", lambda: self._swap(TabSumario)),
         ]
         for row, icon, cmd in nav_items:
             btn = ctk.CTkButton(
@@ -181,47 +187,33 @@ class App(ctk.CTk):
             messagebox.showerror("Erro", f"Falha na importação:\n{exc}")
 
     def _on_close(self):
-        """Cascade SIGTERM to the entire process group, then hard-exit.
-
-        1. Silence all in-flight state callbacks.
-        2. Checkpoint the SQLite WAL to prevent corruption.
-        3. Destroy the Tk window (stops mainloop).
-        4. Kill the whole OS process group with SIGTERM so that every
-           child/worker thread spawned by the app is reaped at the kernel
-           level — no zombie or ghost processes remain.
-        5. os._exit(0) as final backstop.
-        """
+        """Graceful shutdown: silence state → close SQLite → destroy UI → hard exit."""
         from core.state import app_state
 
-        # 1. Block any in-flight notify() calls
+        # 1. Flag shutdown to block any in-flight notify() calls
         app_state._shutting_down = True
+
+        # 2. Silence all state listeners so no callback fires against dead widgets
         for key in app_state.listeners:
             app_state.listeners[key].clear()
 
-        # 2. Clean SQLite WAL checkpoint
+        # 3. Close all SQLite connections explicitly to avoid WAL corruption
         try:
             from core.database import db
+            # Force a clean checkpoint + close on the shared connection pool
             with db.get_connection() as conn:
                 conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         except Exception:
             pass
 
-        # 3. Destroy the Tk window
+        # 4. Destroy the Tk window (stops the mainloop)
         try:
             self.destroy()
         except Exception:
             pass
 
-        # 4. Send SIGTERM cascade to the entire OS process group.
-        #    This is the authoritative kill — it terminates every subprocess
-        #    attached to this app (worker threads, Tcl/Tk internals, etc.).
-        try:
-            pgid = os.getpgid(os.getpid())
-            os.killpg(pgid, signal.SIGTERM)
-        except Exception:
-            pass
-
-        # 5. Final backstop — should never be reached after killpg
+        # 5. Hard exit — orphan Tcl threads can keep the process alive
+        #    even after destroy(). os._exit is the only guaranteed kill.
         os._exit(0)
 
 if __name__ == "__main__":

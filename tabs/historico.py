@@ -7,7 +7,6 @@ import tkinter as tk
 from tkinter import messagebox, filedialog
 
 from core.database import db
-from core.db_worker import db_worker
 from core.utils import (
     load_and_resize_image, resolve_media_path, MEDIA_DIR,
     ACCENT_COLOR, APP_BG_COLOR, BORDER_COLOR, CARD_BG_COLOR
@@ -519,7 +518,7 @@ class TabHistorico(ctk.CTkFrame):
         ctk.CTkEntry(filt, textvariable=self._search_var, width=160, placeholder_text="Peça...").pack(side="left", padx=(0, 8))
 
         ctk.CTkLabel(filt, text="Status:").pack(side="left", padx=(0, 4))
-        self._status_filter = ctk.StringVar(value="Sucesso")
+        self._status_filter = ctk.StringVar(value="Todos")
         self._status_filter.trace_add("write", lambda *_: self._refresh())
         ctk.CTkOptionMenu(filt, variable=self._status_filter, values=["Todos", "Sucesso", "Falha", "Cancelado", "Remake", "Pausado"], width=120).pack(side="left", padx=(0, 12))
 
@@ -550,17 +549,7 @@ class TabHistorico(ctk.CTkFrame):
 
         self._data_rows = []
         self._row_start = 2
-
-        # Loading indicator
-        self._loading_lbl = ctk.CTkLabel(
-            t.master.master,
-            text="⏳ Carregando histórico…",
-            font=ctk.CTkFont(size=14), text_color="#888"
-        )
-
-        # Defer first load: guarantee the OptionMenu has committed its initial
-        # value before the first DB query fires (eliminates concurrency defect).
-        self.after(0, self._refresh)
+        self._refresh()
 
 
     def _load_data(self):
@@ -605,46 +594,20 @@ class TabHistorico(ctk.CTkFrame):
             return res
 
     def _refresh(self, *_):
-        # Clear existing rows immediately
         for row_widgets in self._data_rows:
             for w in row_widgets:
                 if w and w.winfo_exists(): w.destroy()
         self._data_rows = []
 
-        # Show loading indicator while background query runs
-        try:
-            self._loading_lbl.place(relx=0.5, rely=0.5, anchor="center")
-        except Exception:
-            pass
+        data = self._load_data()
 
         search = self._search_var.get().strip().lower()
         sf = self._status_filter.get()
-
-        db_worker.run_query(
-            query_fn=self._load_data,
-            on_done=lambda rows, err: self._on_data(rows, err, search, sf),
-            tk_widget=self,
-        )
-
-    def _on_data(self, data, error, search: str, sf: str):
-        """Tk-thread callback: hides the loader and renders the grid."""
-        try:
-            self._loading_lbl.place_forget()
-        except Exception:
-            pass
-
-        if error:
-            return
-
         if search:
-            data = [d for d in data if search in d["nome_peca"].lower()
-                    or any(search in f['nome'].lower() for f in d['fil_data'])]
+            data = [d for d in data if search in d["nome_peca"].lower() or any(search in f['nome'].lower() for f in d['fil_data'])]
         if sf != "Todos":
             data = [d for d in data if d["status"].lower() == sf.lower()]
 
-        self._render_rows(data)
-
-    def _render_rows(self, data):
         t = self._scroll.inner
         for ri, d in enumerate(data):
             gr = self._row_start + ri

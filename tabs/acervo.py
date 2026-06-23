@@ -3,7 +3,7 @@ import datetime
 import customtkinter as ctk
 from tkinter import messagebox, filedialog
 from core.state import app_state
-from core.widgets import ModernCard, InlineEdit, HorizontalInventoryCard, SearchableComboBox
+from core.widgets import ModernCard, InlineEdit, HorizontalInventoryCard
 from core.utils import load_and_resize_image, copy_to_media, resolve_media_path, ACCENT_COLOR, APP_BG_COLOR, BORDER_COLOR
 
 
@@ -102,19 +102,6 @@ class AcervoCard(HorizontalInventoryCard):
         else:
             self.info_label = None
 
-        # Custo de material calculado (proporcional ao filamento)
-        custo_mat = data.get('custo_material')
-        if custo_mat is not None and custo_mat > 0:
-            self.custo_mat_label = ctk.CTkLabel(
-                self.content_frame,
-                text=f"🧵 Custo Material: R$ {custo_mat:.2f}",
-                text_color="#f0c060", font=ctk.CTkFont(size=11)
-            )
-            self.custo_mat_label.grid(row=meta_row, column=0, sticky="w")
-            meta_row += 1
-        else:
-            self.custo_mat_label = None
-
         if data.get('ultima_impressao'):
             ctk.CTkLabel(self.content_frame,
                          text=f"Última impressão: {data['ultima_impressao']}",
@@ -146,13 +133,6 @@ class AcervoCard(HorizontalInventoryCard):
             if custo is not None and custo > 0:
                 info_parts.append(f"💰 R$ {custo:.2f}")
             self.info_label.configure(text="  |  ".join(info_parts) if info_parts else "")
-        # Atualiza custo material
-        if self.custo_mat_label and self.custo_mat_label.winfo_exists():
-            custo_mat = data.get('custo_material')
-            if custo_mat is not None and custo_mat > 0:
-                self.custo_mat_label.configure(text=f"🧵 Custo Material: R$ {custo_mat:.2f}")
-            else:
-                self.custo_mat_label.configure(text="")
         _LazyImage(self.img_label, data.get('caminho_foto'), size=(90, 90))
 
     def _make_saver(self, field):
@@ -354,10 +334,9 @@ class TabAcervo(ctk.CTkFrame):
         add_row.pack(fill="x", padx=10, pady=5)
 
         self.filamentos_dict = self._get_filamentos()
-        self.f_combo = SearchableComboBox(
+        self.f_combo = ctk.CTkComboBox(
             add_row,
-            values=list(self.filamentos_dict.keys()) if self.filamentos_dict else [],
-            placeholder_text="Buscar filamento..."
+            values=list(self.filamentos_dict.keys()) if self.filamentos_dict else ["Nenhum"]
         )
         self.f_combo.pack(side="left", fill="x", expand=True, padx=(0, 10))
         ctk.CTkButton(add_row, text="Adicionar Filamento", width=150,
@@ -397,12 +376,13 @@ class TabAcervo(ctk.CTkFrame):
 
     def _on_filamentos_change(self, event=None):
         self.filamentos_dict = self._get_filamentos()
-        new_keys = list(self.filamentos_dict.keys()) if self.filamentos_dict else []
-        self.f_combo.configure_values(new_keys)
-        if new_keys:
-            self.f_combo.set(new_keys[0])
+        self.f_combo.configure(
+            values=list(self.filamentos_dict.keys()) if self.filamentos_dict else ["Nenhum"]
+        )
+        if self.filamentos_dict:
+            self.f_combo.set(list(self.filamentos_dict.keys())[0])
         else:
-            self.f_combo.set("")
+            self.f_combo.set("Nenhum")
 
     def _select_photo(self):
         path = filedialog.askopenfilename(filetypes=[("Imagens", "*.jpg *.jpeg *.png")])
@@ -532,8 +512,6 @@ class TabAcervo(ctk.CTkFrame):
         app_state.load_acervo()
         app_state.load_filamentos()
 
-    PAGE_SIZE = 20
-
     def _on_state_change(self, event=None):
         if event:
             action = event.get('action')
@@ -550,35 +528,8 @@ class TabAcervo(ctk.CTkFrame):
         for w in self.cards.values():
             w.destroy()
         self.cards = {}
-        self._loaded_count = 0
-        if hasattr(self, '_load_more_btn') and self._load_more_btn.winfo_exists():
-            self._load_more_btn.destroy()
-        self._load_more_btn = None
-        self._load_page()
-
-    def _load_page(self):
-        data_slice = app_state.acervo[self._loaded_count:
-                                      self._loaded_count + self.PAGE_SIZE]
-        for data in data_slice:
+        for data in app_state.acervo:
             self._add_card(data)
-        self._loaded_count += len(data_slice)
-
-        # Remove old "Carregar Mais" button if present
-        if hasattr(self, '_load_more_btn') and self._load_more_btn and \
-                self._load_more_btn.winfo_exists():
-            self._load_more_btn.destroy()
-            self._load_more_btn = None
-
-        if self._loaded_count < len(app_state.acervo):
-            remaining = len(app_state.acervo) - self._loaded_count
-            self._load_more_btn = ctk.CTkButton(
-                self.list_frame,
-                text=f"Carregar Mais ({remaining} restantes)",
-                fg_color="#2a2a4a", hover_color="#3a3a6a",
-                font=ctk.CTkFont(size=13),
-                command=self._load_page
-            )
-            self._load_more_btn.pack(fill="x", padx=10, pady=10)
 
     def _add_card(self, data):
         card = AcervoCard(self.list_frame, data)

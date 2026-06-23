@@ -214,16 +214,10 @@ class DatabaseManager:
                 c.execute("ALTER TABLE pedidos_v2 ADD COLUMN plataforma_venda TEXT")
             except sqlite3.OperationalError:
                 pass
-            
-            # --- ROTA DE CORREÇÃO: Coluna nome_avulso implementada na tabela pedidos_itens ---
             c.execute('''CREATE TABLE IF NOT EXISTS pedidos_itens
                          (pedido_id INTEGER, acervo_id INTEGER,
                           FOREIGN KEY(pedido_id) REFERENCES pedidos_v2(id),
                           FOREIGN KEY(acervo_id) REFERENCES acervo(id))''')
-            try:
-                c.execute("ALTER TABLE pedidos_itens ADD COLUMN nome_avulso TEXT")
-            except sqlite3.OperationalError:
-                pass
 
             # Seed manutencao
             if c.execute("SELECT COUNT(*) FROM manutencao").fetchone()[0] == 0:

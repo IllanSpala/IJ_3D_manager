@@ -14,16 +14,13 @@ class FilamentoCard(HorizontalInventoryCard):
         top_bar = ctk.CTkFrame(self.content_frame, fg_color="transparent")
         top_bar.pack(fill="x", pady=(0, 5))
 
-        if data.get('status') == 'Esgotado':
-            # Item esgotado: ação permanente, sem botões de retorno/exclusão
-            ctk.CTkLabel(top_bar, text="⛔ Esgotado", text_color="#d64545",
-                         font=ctk.CTkFont(size=11, weight="bold")).pack(side="right", padx=8)
+        if data.get('status') == 'Arquivado':
+            ctk.CTkButton(top_bar, text="Retornar ao Estoque", width=120, height=22, fg_color="#2b7a4b", command=self._restore).pack(side="left")
         else:
-            ctk.CTkButton(top_bar, text="⊘ Esgotado", width=110, height=22,
-                          fg_color="#5a1a1a", hover_color="#7a2a2a",
-                          font=ctk.CTkFont(size=11),
-                          command=self._mark_esgotado).pack(side="right", padx=5)
-
+            ctk.CTkButton(top_bar, text="✕", width=22, height=22,
+                          fg_color="transparent", text_color="#d64545",
+                          command=self._delete).pack(side="right", padx=5)
+                      
         ctk.CTkButton(top_bar, text="+", width=30, height=22, fg_color="transparent", border_width=1, border_color="#555", hover_color="#333", command=self._open_detalhes).pack(side="right", padx=5)
 
         info_frame = ctk.CTkFrame(self.content_frame, fg_color="transparent")
@@ -139,13 +136,6 @@ class FilamentoCard(HorizontalInventoryCard):
                 return False
         return saver
 
-    def _mark_esgotado(self):
-        if messagebox.askyesno("Confirmar",
-                               "Marcar este filamento como Esgotado?\n\n"
-                               "Esta ação é permanente: não será possível restaurar ou excluir."):
-            app_state.update_filamento(self.f_id, {'status': 'Esgotado'})
-            app_state.load_filamentos()
-
     def _delete(self):
         if messagebox.askyesno("Confirmar", "Arquivar este filamento?"):
             app_state.archive_filamento(self.f_id)
@@ -212,7 +202,7 @@ class TabFilamentos(ctk.CTkFrame):
         self.tabview = ctk.CTkTabview(self, fg_color="transparent")
         self.tabview.pack(side="top", fill="both", expand=True, padx=20, pady=(5, 20))
         self.tab_ativos = self.tabview.add("Ativos")
-        self.tab_arq = self.tabview.add("Esgotados")
+        self.tab_arq = self.tabview.add("Arquivados")
         
         self.list_frame = ctk.CTkScrollableFrame(self.tab_ativos, fg_color="transparent")
         self.list_frame.pack(fill="both", expand=True)
@@ -222,10 +212,6 @@ class TabFilamentos(ctk.CTkFrame):
         
         self.cards = {}
         self.col_count = 2
-        self._loaded_ativos = 0
-        self._loaded_esgotados = 0
-        self._load_more_ativos = None
-        self._load_more_esgotados = None
         
         app_state.subscribe('filamentos', self._on_state_change)
         app_state.load_filamentos()
@@ -274,8 +260,6 @@ class TabFilamentos(ctk.CTkFrame):
         self._new_foto_filename = None
         self.btn_foto.configure(text="Buscar", fg_color="#333")
 
-    PAGE_SIZE = 20
-
     def _on_state_change(self, event=None):
         if event:
             action = event.get('action')
@@ -291,80 +275,19 @@ class TabFilamentos(ctk.CTkFrame):
         # Full rebuild (initial load or structural change)
         for w in self.cards.values(): w.destroy()
         self.cards = {}
-
+        
         for c in range(self.col_count):
             self.list_frame.grid_columnconfigure(c, weight=1)
             self.list_arq.grid_columnconfigure(c, weight=1)
-
+            
         ativos = [d for d in app_state.filamentos if d['status'] == 'Ativo']
-        esgotados = [d for d in app_state.filamentos if d['status'] in ('Esgotado', 'Arquivado')]
-
-        self._loaded_ativos = 0
-        self._loaded_esgotados = 0
-
-        # Remove old "Carregar Mais" buttons
-        for btn_attr in ('_load_more_ativos', '_load_more_esgotados'):
-            btn = getattr(self, btn_attr, None)
-            if btn and btn.winfo_exists():
-                btn.destroy()
-            setattr(self, btn_attr, None)
-
-        self._ativos_data = ativos
-        self._esgotados_data = esgotados
-        self._load_page_ativos()
-        self._load_page_esgotados()
-
-    def _load_page_ativos(self):
-        batch = self._ativos_data[self._loaded_ativos:
-                                  self._loaded_ativos + self.PAGE_SIZE]
-        for i, data in enumerate(batch):
-            self._add_card(data, self._loaded_ativos + i, self.list_frame)
-        self._loaded_ativos += len(batch)
-
-        if self._load_more_ativos and self._load_more_ativos.winfo_exists():
-            self._load_more_ativos.destroy()
-            self._load_more_ativos = None
-
-        if self._loaded_ativos < len(self._ativos_data):
-            rem = len(self._ativos_data) - self._loaded_ativos
-            self._load_more_ativos = ctk.CTkButton(
-                self.list_frame,
-                text=f"Carregar Mais ({rem} restantes)",
-                fg_color="#2a2a4a", hover_color="#3a3a6a",
-                font=ctk.CTkFont(size=13),
-                command=self._load_page_ativos
-            )
-            self._load_more_ativos.grid(
-                row=(self._loaded_ativos // self.col_count) + 1,
-                column=0, columnspan=self.col_count,
-                sticky="ew", padx=5, pady=10
-            )
-
-    def _load_page_esgotados(self):
-        batch = self._esgotados_data[self._loaded_esgotados:
-                                     self._loaded_esgotados + self.PAGE_SIZE]
-        for i, data in enumerate(batch):
-            self._add_card(data, self._loaded_esgotados + i, self.list_arq)
-        self._loaded_esgotados += len(batch)
-
-        if self._load_more_esgotados and self._load_more_esgotados.winfo_exists():
-            self._load_more_esgotados.destroy()
-            self._load_more_esgotados = None
-
-        if self._loaded_esgotados < len(self._esgotados_data):
-            rem = len(self._esgotados_data) - self._loaded_esgotados
-            self._load_more_esgotados = ctk.CTkButton(
-                self.list_arq,
-                text=f"Carregar Mais ({rem} restantes)",
-                fg_color="#2a2a4a", hover_color="#3a3a6a",
-                font=ctk.CTkFont(size=13),
-                command=self._load_page_esgotados
-            )
-            self._load_more_esgotados.grid(
-                row=(self._loaded_esgotados // self.col_count) + 1,
-                column=0, columnspan=self.col_count,
-                sticky="ew", padx=5, pady=10
-            )
+        arquivados = [d for d in app_state.filamentos if d['status'] == 'Arquivado']
+        
+        for i, data in enumerate(ativos):
+            self._add_card(data, i, self.list_frame)
+            
+        for i, data in enumerate(arquivados):
+            self._add_card(data, i, self.list_arq)
 
     def _add_card(self, data, index, parent_frame):
         card = FilamentoCard(parent_frame, data)

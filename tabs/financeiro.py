@@ -3,7 +3,7 @@ import customtkinter as ctk
 from tkinter import messagebox
 from core.database import db
 from core.state import app_state
-from core.widgets import ModernCard, SearchableComboBox
+from core.widgets import ModernCard
 from core.utils import ACCENT_COLOR, BORDER_COLOR
 
 # ─── Tooltip popup ────────────────────────────────────────────────────────────
@@ -535,11 +535,9 @@ class TabFinanceiro(ctk.CTkFrame):
         ctk.CTkLabel(sel_row, text="Selecione a Peça / Kit:").grid(
             row=0, column=0, sticky="e", padx=(0, 8))
         self.acervo_dict = self._get_acervo()
-        self.peca_combo = SearchableComboBox(
-            sel_row,
-            values=list(self.acervo_dict.keys()) if self.acervo_dict else [],
-            command=self._on_peca_selected,
-            placeholder_text="Buscar peça ou kit..."
+        self.peca_combo = ctk.CTkComboBox(
+            sel_row, values=list(self.acervo_dict.keys()) if self.acervo_dict else ["Nenhuma Peça"],
+            command=self._on_peca_selected
         )
         self.peca_combo.grid(row=0, column=1, sticky="ew")
         _make_info_btn(sel_row,
