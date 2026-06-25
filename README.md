@@ -8,7 +8,7 @@ Sistema ERP pessoal para gestão de impressão 3D — Bambu Lab A1 e compatívei
 Desenvolvido em **Python 3.11+** com **CustomTkinter**, banco de dados **SQLite** local e empacotamento via **PyInstaller**.
 
 > ⚠️ **Este repositório gera exclusivamente o executável Windows (.exe).**
-> Para a versão Web (visualização via navegador), consulte o repositório **[IJ_3D_web](https://github.com/seu-usuario/IJ_3D_web)**.
+> Para a versão Web (visualização via navegador), consulte o repositório **[IJ_3D_web](https://github.com/IllanSpala/IJ_3D_web)**.
 
 ---
 
