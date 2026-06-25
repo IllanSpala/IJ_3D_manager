@@ -1,6 +1,6 @@
 import customtkinter as ctk
 
-CARD_BG_COLOR = "#212121"
+CARD_BG_COLOR = "#1a1a1a"
 BORDER_COLOR  = "#333333"
 
 class ModernCard(ctk.CTkFrame):
@@ -8,11 +8,22 @@ class ModernCard(ctk.CTkFrame):
         bc = kwargs.pop("border_color", BORDER_COLOR)
         bw = kwargs.pop("border_width", 1)
         fc = kwargs.pop("fg_color", CARD_BG_COLOR)
-        cr = kwargs.pop("corner_radius", 12)
+        cr = kwargs.pop("corner_radius", 8)
         super().__init__(
             master, fg_color=fc, corner_radius=cr,
             border_width=bw, border_color=bc, **kwargs,
         )
+        self.default_border = bc
+        from core.utils import ACCENT_COLOR
+        self.hover_color = ACCENT_COLOR
+        self.bind("<Enter>", self._on_card_hover)
+        self.bind("<Leave>", self._on_card_leave)
+
+    def _on_card_hover(self, event):
+        self.configure(border_color=self.hover_color)
+
+    def _on_card_leave(self, event):
+        self.configure(border_color=self.default_border)
 
 class InlineEdit(ctk.CTkEntry):
     """An entry widget that looks like a label but allows editing on focus, saving on focus out."""

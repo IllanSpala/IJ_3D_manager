@@ -5,7 +5,9 @@ from core.state import app_state
 from core.widgets import InlineEdit
 from core.utils import ACCENT_COLOR
 
-class PedidoCard(ctk.CTkFrame):
+from core.widgets import InlineEdit, ModernCard
+
+class PedidoCard(ModernCard):
     def __init__(self, master, data, **kwargs):
         self.p_id = data['id']
         self.data = data
@@ -14,7 +16,7 @@ class PedidoCard(ctk.CTkFrame):
         # Priority colors based on date
         b_color, f_color = self._get_priority_colors(data['data_entrega'], self.status)
         
-        super().__init__(master, corner_radius=15, border_width=2, border_color=b_color, fg_color=f_color, **kwargs)
+        super().__init__(master, corner_radius=8, border_width=1, border_color=b_color, fg_color=f_color, **kwargs)
 
         inner = ctk.CTkFrame(self, fg_color="transparent")
         inner.pack(fill="both", expand=True, padx=12, pady=12)
@@ -174,7 +176,9 @@ class TabPedidos(ctk.CTkFrame):
         self.acervo_dict = self._get_acervo()
         self.peca_combo = ctk.CTkComboBox(f2, values=list(self.acervo_dict.keys()) if self.acervo_dict else ["Acervo Vazio"], height=35)
         self.peca_combo.pack(side="left", fill="x", expand=True, padx=5)
-        ctk.CTkButton(f2, text="+ Adicionar à Lista", height=35, fg_color="#333", hover_color="#444", command=self._add_peca_ui).pack(side="left", padx=5)
+        ctk.CTkButton(f2, text="+ Acervo", height=35, width=90, fg_color="#333", hover_color="#444", command=self._add_peca_ui).pack(side="left", padx=(5, 10))
+        
+        ctk.CTkButton(f2, text="+ Peça Avulsa", height=35, width=120, fg_color="#2b7a4b", hover_color="#1d5c36", font=ctk.CTkFont(weight="bold"), command=self._open_avulsa_modal).pack(side="left", padx=5)
 
         self.pecas_selecionadas = []
         self.pecas_ui_frame = ctk.CTkFrame(self.form_card, fg_color="transparent")
@@ -244,16 +248,40 @@ class TabPedidos(ctk.CTkFrame):
                 if pi and pi > 0:
                     custo_peca += (pg + pd) * (pr / pi)
                     
-        ctk.CTkButton(row_ui, text="✕", width=20, height=20, corner_radius=10, fg_color="transparent", text_color="#d64545", hover_color="#444", command=lambda r=row_ui, c=custo_peca: self._rem_peca(r, c)).pack(side="right", padx=5)
-        self.pecas_selecionadas.append({"id": acervo_id, "ui": row_ui})
+        ctk.CTkButton(row_ui, text="✕", width=20, height=20, corner_radius=10, fg_color="transparent", text_color="#d64545", hover_color="#444", command=lambda r=row_ui, c=custo_peca, i=acervo_id: self._rem_peca(r, c, i)).pack(side="right", padx=5)
+        self.pecas_selecionadas.append({"tipo": "acervo", "id": acervo_id, "ui": row_ui})
         
         try: v = float(self.valor_var.get().replace(",", ".")) if self.valor_var.get() else 0.0
         except ValueError: v = 0.0
         self.valor_var.set(f"{max(0.0, v + custo_peca):.2f}")
 
-    def _rem_peca(self, r, custo):
+    def _add_avulsa_ui(self, nome, tempo, custo_total, filamentos):
+        row_ui = ctk.CTkFrame(self.pecas_ui_frame, fg_color="#1e3a5f", corner_radius=8)
+        row_ui.pack(side="left", padx=5, pady=5)
+        ctk.CTkLabel(row_ui, text=f"Avulsa: {nome}", font=ctk.CTkFont(size=13, weight="bold")).pack(side="left", padx=10, pady=5)
+        
+        idx = len(self.pecas_selecionadas)
+        ctk.CTkButton(row_ui, text="✕", width=20, height=20, corner_radius=10, fg_color="transparent", text_color="#ff6b6b", hover_color="#444", command=lambda r=row_ui, c=custo_total, i=idx: self._rem_peca(r, c, i)).pack(side="right", padx=5)
+        self.pecas_selecionadas.append({
+            "tipo": "avulso", 
+            "id": idx,
+            "nome": nome, 
+            "tempo": tempo, 
+            "custo": custo_total, 
+            "filamentos": filamentos, 
+            "ui": row_ui
+        })
+        
+        try: v = float(self.valor_var.get().replace(",", ".")) if self.valor_var.get() else 0.0
+        except ValueError: v = 0.0
+        self.valor_var.set(f"{max(0.0, v + custo_total):.2f}")
+
+    def _open_avulsa_modal(self):
+        AdicionarAvulsoModal(self.winfo_toplevel(), self._add_avulsa_ui)
+
+    def _rem_peca(self, r, custo, item_id):
         r.destroy()
-        self.pecas_selecionadas = [i for i in self.pecas_selecionadas if i["ui"] != r]
+        self.pecas_selecionadas = [i for i in self.pecas_selecionadas if i["id"] != item_id]
         try: v = float(self.valor_var.get().replace(",", ".")) if self.valor_var.get() else 0.0
         except ValueError: v = 0.0
         self.valor_var.set(f"{max(0.0, v - custo):.2f}")
@@ -272,7 +300,15 @@ class TabPedidos(ctk.CTkFrame):
                       (self.cliente_var.get(), self.data_var.get(), v, "A Fazer", self.plataforma_var.get()))
             pid = c.lastrowid
             for item in self.pecas_selecionadas:
-                c.execute("INSERT INTO pedidos_itens (pedido_id, acervo_id) VALUES (?,?)", (pid, item["id"]))
+                if item.get("tipo") == "avulso":
+                    c.execute("INSERT INTO pedidos_itens (pedido_id, tipo, nome_avulso, custo_est, nota) VALUES (?,?,?,?,?)",
+                              (pid, "avulso", item["nome"], item["custo"], item.get("tempo", "")))
+                    item_idx = c.lastrowid
+                    for fil in item["filamentos"]:
+                        c.execute("INSERT INTO pedido_filamentos_avulsos (pedido_id, item_idx, filamento_id, peso_modelo_g, peso_purga_g, custo_unit) VALUES (?,?,?,?,?,?)",
+                                  (pid, item_idx, fil["fil_id"], fil["peso"], fil["purga"], fil["custo"]))
+                else:
+                    c.execute("INSERT INTO pedidos_itens (pedido_id, acervo_id, tipo) VALUES (?,?,?)", (pid, item["id"], "acervo"))
                 item["ui"].destroy()
             conn.commit()
             
@@ -291,12 +327,118 @@ class TabPedidos(ctk.CTkFrame):
             action = event.get('action')
             p_id = event.get('id')
             if action == 'update':
-                # If status changed, we need to move it to another column.
-                # Simplest way is to destroy and recreate it in the correct column.
                 if p_id in self.cards:
                     self.cards[p_id].destroy()
                     del self.cards[p_id]
                 self._add_card(event['data'])
+
+class AdicionarAvulsoModal(ctk.CTkToplevel):
+    def __init__(self, master, on_add_callback):
+        super().__init__(master)
+        self.title("Adicionar Peça Avulsa")
+        self.geometry("600x500")
+        self.configure(fg_color="#181818")
+        self.resizable(False, False)
+        self.grab_set()
+        
+        self.on_add_callback = on_add_callback
+        
+        self.filamentos = app_state.get_filamentos_ativos()
+        self.fil_rows = []
+        
+        f_top = ctk.CTkFrame(self, fg_color="transparent")
+        f_top.pack(fill="x", padx=20, pady=(20, 10))
+        
+        ctk.CTkLabel(f_top, text="Nome da Peça:").pack(anchor="w")
+        self.nome_var = ctk.StringVar()
+        ctk.CTkEntry(f_top, textvariable=self.nome_var, width=300).pack(anchor="w", pady=(0, 10))
+        
+        ctk.CTkLabel(f_top, text="Tempo Estimado (HH:MM) [opcional]:").pack(anchor="w")
+        self.tempo_var = ctk.StringVar()
+        ctk.CTkEntry(f_top, textvariable=self.tempo_var, width=150, placeholder_text="02:30").pack(anchor="w", pady=(0, 10))
+        
+        ctk.CTkLabel(self, text="Filamentos (Modelo + Purga):").pack(anchor="w", padx=20)
+        
+        self.scroll = ctk.CTkScrollableFrame(self, fg_color="#222", height=150)
+        self.scroll.pack(fill="both", expand=True, padx=20, pady=(5, 10))
+        
+        ctk.CTkButton(self, text="+ Adicionar Filamento", fg_color="#333", hover_color="#444", command=self._add_fil_row).pack(anchor="w", padx=20, pady=(0, 10))
+        
+        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=20, pady=20)
+        
+        ctk.CTkButton(btn_frame, text="Cancelar", fg_color="transparent", hover_color="#333", command=self.destroy).pack(side="left")
+        ctk.CTkButton(btn_frame, text="Salvar e Adicionar", fg_color=ACCENT_COLOR, command=self._save).pack(side="right")
+        
+    def _add_fil_row(self):
+        row = ctk.CTkFrame(self.scroll, fg_color="#1a1a1a", corner_radius=6)
+        row.pack(fill="x", pady=2)
+        
+        fil_var = ctk.StringVar()
+        opts = [f"{f['marca']} {f['material']} {f['cor']}" for f in self.filamentos]
+        opt = ctk.CTkOptionMenu(row, variable=fil_var, values=opts if opts else ["Sem Filamentos"], width=200)
+        opt.pack(side="left", padx=5, pady=5)
+        
+        mod_var = ctk.StringVar(value="0")
+        pur_var = ctk.StringVar(value="0")
+        
+        ctk.CTkLabel(row, text="M(g):", font=ctk.CTkFont(size=11)).pack(side="left", padx=(10, 2))
+        ctk.CTkEntry(row, textvariable=mod_var, width=50).pack(side="left")
+        
+        ctk.CTkLabel(row, text="P(g):", font=ctk.CTkFont(size=11)).pack(side="left", padx=(10, 2))
+        ctk.CTkEntry(row, textvariable=pur_var, width=50).pack(side="left")
+        
+        def _rem():
+            row.destroy()
+            self.fil_rows = [r for r in self.fil_rows if r["ui"] != row]
+            
+        ctk.CTkButton(row, text="X", width=25, fg_color="#d64545", hover_color="#8a2020", command=_rem).pack(side="right", padx=5)
+        
+        self.fil_rows.append({
+            "ui": row,
+            "fil_var": fil_var,
+            "mod_var": mod_var,
+            "pur_var": pur_var
+        })
+        
+    def _save(self):
+        nome = self.nome_var.get().strip()
+        if not nome:
+            messagebox.showerror("Erro", "Nome é obrigatório.", parent=self)
+            return
+            
+        custo_total = 0.0
+        fils_data = []
+        
+        for r in self.fil_rows:
+            sel = r["fil_var"].get()
+            f_id = None
+            f_preco_g = 0.0
+            
+            for f in self.filamentos:
+                if f"{f['marca']} {f['material']} {f['cor']}" == sel:
+                    f_id = f["id"]
+                    if f.get("peso_inicial") and f["peso_inicial"] > 0:
+                        f_preco_g = float(f.get("preco_rolo", 0.0)) / float(f["peso_inicial"])
+                    break
+                    
+            try: mod = float(r["mod_var"].get().replace(",", "."))
+            except: mod = 0.0
+            try: pur = float(r["pur_var"].get().replace(",", "."))
+            except: pur = 0.0
+            
+            custo_item = (mod + pur) * f_preco_g
+            custo_total += custo_item
+            
+            fils_data.append({
+                "fil_id": f_id,
+                "peso": mod,
+                "purga": pur,
+                "custo": custo_item
+            })
+            
+        self.on_add_callback(nome, self.tempo_var.get(), custo_total, fils_data)
+        self.destroy()
 
     def _add_card(self, data):
         status = data['status']

@@ -183,13 +183,22 @@ class StateManager:
             self.pedidos = [dict(r) for r in rows]
 
             for p in self.pedidos:
-                pecas = conn.execute(
+                # Load Acervo linked items
+                pecas_acervo = conn.execute(
                     """SELECT a.nome_peca
                        FROM pedidos_itens pi
                        JOIN acervo a ON pi.acervo_id=a.id
-                       WHERE pi.pedido_id=?""", (p['id'],)
+                       WHERE pi.pedido_id=? AND (pi.tipo='acervo' OR pi.tipo IS NULL)""", (p['id'],)
                 ).fetchall()
-                p['pecas'] = [dict(pc) for pc in pecas]
+                
+                # Load Avulso items
+                pecas_avulsas = conn.execute(
+                    """SELECT COALESCE(nome_avulso, nome_custom, 'Peça Avulsa') as nome_peca
+                       FROM pedidos_itens
+                       WHERE pedido_id=? AND tipo='avulso'""", (p['id'],)
+                ).fetchall()
+                
+                p['pecas'] = [dict(pc) for pc in pecas_acervo] + [dict(pc) for pc in pecas_avulsas]
 
         self.notify('pedidos')
 
