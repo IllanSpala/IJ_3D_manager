@@ -370,7 +370,7 @@ class TabAcervo(ctk.CTkFrame):
         from core.database import db
         with db.get_connection() as conn:
             rows = conn.execute(
-                "SELECT id, marca, material, cor FROM filamentos WHERE status != 'Arquivado'"
+                "SELECT id, marca, material, cor FROM filamentos WHERE status = 'Ativo'"
             ).fetchall()
         return {f"{r[1]} {r[2]} ({r[3]})": r[0] for r in rows}
 

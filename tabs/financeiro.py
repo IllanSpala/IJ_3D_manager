@@ -236,12 +236,12 @@ class _TesteManualPanel(ctk.CTkFrame):
         self._add_row()
 
     def _load_filamentos(self):
-        """Carrega filamentos ativos (não arquivados) do banco de dados."""
+        """Carrega filamentos ativos do banco de dados."""
         from core.database import db
         with db.get_connection() as conn:
             rows = conn.execute(
                 "SELECT id, marca, material, cor, preco_rolo, peso_inicial "
-                "FROM filamentos WHERE status != 'Arquivado' ORDER BY marca, material, cor"
+                "FROM filamentos WHERE status = 'Ativo' ORDER BY marca, material, cor"
             ).fetchall()
         self._filamentos_dict = {}
         for fid, marca, material, cor, preco_rolo, peso_ini in rows:
@@ -969,4 +969,3 @@ class TabFinanceiro(ctk.CTkFrame):
             "preco_estimado":  float(preco_estimado_str) if preco_estimado_str else None,
         }
         self.results_panel.render(breakdown)
-

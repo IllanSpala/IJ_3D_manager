@@ -3,16 +3,9 @@ import functools
 from typing import Callable, Dict, List, Any
 from core.database import db
 
-
 def _lru_db_cache(maxsize: int = 32):
-    """
-    Thin decorator that caches the result of a zero-argument DB read.
-    Cache is invalidated by calling `func.cache_clear()`.
-    Uses functools.lru_cache under the hood.
-    """
     def decorator(fn):
         cached = functools.lru_cache(maxsize=maxsize)(fn)
-        # Attach helpers so callers can clear on mutation
         fn._cached_impl = cached
         def wrapper(*args, **kwargs):
             return cached(*args, **kwargs)
@@ -20,7 +13,6 @@ def _lru_db_cache(maxsize: int = 32):
         wrapper.cache_info  = cached.cache_info
         return wrapper
     return decorator
-
 
 class StateManager:
     def __init__(self):
@@ -50,25 +42,18 @@ class StateManager:
             except Exception:
                 pass
 
-    # ── Cached static reads ───────────────────────────────────────────────────
     def get_filamentos_ativos(self) -> list[dict]:
-        """
-        Returns all non-archived filaments.
-        Cached in memory; call invalidate_filamentos_cache() after any mutation.
-        """
         return _get_filamentos_ativos_cached()
 
     def invalidate_filamentos_cache(self):
         _get_filamentos_ativos_cached.cache_clear()
 
     def get_configuracoes(self) -> dict:
-        """Returns the configuracoes row. Cached; invalidate with invalidate_config_cache()."""
         return _get_configuracoes_cached()
 
     def invalidate_config_cache(self):
         _get_configuracoes_cached.cache_clear()
 
-    # ── Filamentos ────────────────────────────────────────────────────────────
     def load_filamentos(self):
         self.invalidate_filamentos_cache()
         with db.get_connection() as conn:
@@ -107,7 +92,6 @@ class StateManager:
         self.filamentos = [f for f in self.filamentos if f['id'] != f_id]
         self.notify('filamentos', {'action': 'remove', 'id': f_id})
 
-    # ── Acervo ────────────────────────────────────────────────────────────────
     def load_acervo(self):
         with db.get_connection() as conn:
             conn.row_factory = sqlite3.Row
@@ -152,7 +136,6 @@ class StateManager:
                 self.notify('acervo', {'action': 'update', 'id': a_id, 'data': a})
                 break
 
-    # ── Almoxarifado ──────────────────────────────────────────────────────────
     def load_almoxarifado(self):
         with db.get_connection() as conn:
             conn.row_factory = sqlite3.Row
@@ -175,7 +158,6 @@ class StateManager:
                 self.notify('almoxarifado', {'action': 'update', 'id': item_id, 'data': i})
                 break
 
-    # ── Pedidos ───────────────────────────────────────────────────────────────
     def load_pedidos(self):
         with db.get_connection() as conn:
             conn.row_factory = sqlite3.Row
@@ -183,7 +165,6 @@ class StateManager:
             self.pedidos = [dict(r) for r in rows]
 
             for p in self.pedidos:
-                # Load Acervo linked items
                 pecas_acervo = conn.execute(
                     """SELECT a.nome_peca
                        FROM pedidos_itens pi
@@ -191,7 +172,6 @@ class StateManager:
                        WHERE pi.pedido_id=? AND (pi.tipo='acervo' OR pi.tipo IS NULL)""", (p['id'],)
                 ).fetchall()
                 
-                # Load Avulso items
                 pecas_avulsas = conn.execute(
                     """SELECT COALESCE(nome_avulso, nome_custom, 'Peça Avulsa') as nome_peca
                        FROM pedidos_itens
@@ -216,31 +196,25 @@ class StateManager:
                 break
 
 
-# ── Module-level LRU-cached DB readers ───────────────────────────────────────
 @functools.lru_cache(maxsize=1)
 def _get_filamentos_ativos_cached() -> list[dict]:
-    """Cached read of all active filaments (non-archived)."""
     with db.get_connection() as conn:
         conn.row_factory = sqlite3.Row
+        # Restrição rígida: Traz somente o que está explicitamente 'Ativo'
         rows = conn.execute(
             "SELECT id, marca, material, cor, peso_inicial, preco_rolo "
-            "FROM filamentos WHERE status != 'Arquivado'"
+            "FROM filamentos WHERE status = 'Ativo'"
         ).fetchall()
     return [dict(r) for r in rows]
 
-
 @functools.lru_cache(maxsize=1)
 def _get_configuracoes_cached() -> dict:
-    """Cached read of the singleton configuracoes row."""
     with db.get_connection() as conn:
         conn.row_factory = sqlite3.Row
         row = conn.execute("SELECT * FROM configuracoes WHERE id=1").fetchone()
     return dict(row) if row else {}
 
-
-# Expose cache_clear so StateManager can invalidate
 _get_filamentos_ativos_cached = _get_filamentos_ativos_cached
 _get_configuracoes_cached     = _get_configuracoes_cached
-
 
 app_state = StateManager()

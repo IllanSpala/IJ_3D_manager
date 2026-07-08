@@ -42,7 +42,8 @@ class InlineEdit(ctk.CTkEntry):
         
         if self.is_double:
             try:
-                initial_value = f"{float(initial_value):.2f}"
+                # Força sempre a representação com duas casas
+                initial_value = f"{float(str(initial_value).replace(',', '.')):.2f}"
             except (ValueError, TypeError):
                 pass
                 
@@ -59,12 +60,9 @@ class InlineEdit(ctk.CTkEntry):
         self.configure(text_color="#99c2ff", cursor="xterm")
 
     def _on_leave(self, event):
-        # Only reset text_color. Never touch fg_color here — avoids ValueError
-        # on transparent frames in certain CustomTkinter versions.
         self.configure(text_color=self.default_color)
 
     def _handle_save(self, event):
-        # Only reset text_color. Same rationale as _on_leave.
         self.configure(text_color=self.default_color)
         new_val = self.get()
         if new_val != str(self._initial_value):
@@ -110,5 +108,4 @@ class HorizontalInventoryCard(ModernCard):
                 self.img_label.configure(image=img_ctk, text="")
                 self.img_label.image = img_ctk
                 return
-        # Use image=None strictly — image="" can crash on some Tk backends.
         self.img_label.configure(text="S/ Img", image=None, fg_color="#222")

@@ -14,12 +14,12 @@ class FilamentoCard(HorizontalInventoryCard):
         top_bar = ctk.CTkFrame(self.content_frame, fg_color="transparent")
         top_bar.pack(fill="x", pady=(0, 5))
 
-        if data.get('status') == 'Arquivado':
+        if data.get('status') == 'Esgotado':
             ctk.CTkButton(top_bar, text="Retornar ao Estoque", width=120, height=22, fg_color="#2b7a4b", command=self._restore).pack(side="left")
         else:
             ctk.CTkButton(top_bar, text="✕", width=22, height=22,
                           fg_color="transparent", text_color="#d64545",
-                          command=self._delete).pack(side="right", padx=5)
+                          command=self._esgotar).pack(side="right", padx=5)
                       
         ctk.CTkButton(top_bar, text="+", width=30, height=22, fg_color="transparent", border_width=1, border_color="#555", hover_color="#333", command=self._open_detalhes).pack(side="right", padx=5)
 
@@ -41,7 +41,6 @@ class FilamentoCard(HorizontalInventoryCard):
         self.preco_entry = InlineEdit(preco_frame, data['preco_rolo'], self._make_saver_float('preco_rolo'), text_color="#10b981", font=ctk.CTkFont(size=18, weight="bold"), is_double=True)
         self.preco_entry.pack(side="left")
 
-        # ── Peso atual: editável diretamente, sem slider ─────────────────────────────
         peso_row = ctk.CTkFrame(self.content_frame, fg_color="transparent")
         peso_row.pack(fill="x", pady=(4, 2))
 
@@ -57,7 +56,6 @@ class FilamentoCard(HorizontalInventoryCard):
         self._peso_entry.bind("<FocusOut>", self._save_peso)
         self._peso_entry.bind("<Return>",   self._save_peso)
 
-        # Reserva de rolos
         res_row = ctk.CTkFrame(self.content_frame, fg_color="transparent")
         res_row.pack(fill="x", pady=(2, 2))
         self.lbl_reserva = ctk.CTkLabel(res_row, text="", text_color="gray", font=ctk.CTkFont(size=11))
@@ -136,9 +134,9 @@ class FilamentoCard(HorizontalInventoryCard):
                 return False
         return saver
 
-    def _delete(self):
-        if messagebox.askyesno("Confirmar", "Arquivar este filamento?"):
-            app_state.archive_filamento(self.f_id)
+    def _esgotar(self):
+        if messagebox.askyesno("Confirmar", "Mover este filamento para esgotados?"):
+            app_state.update_filamento(self.f_id, {'status': 'Esgotado'})
 
     def _restore(self):
         if messagebox.askyesno("Confirmar", "Retornar este filamento ao estoque?"):
@@ -153,7 +151,6 @@ class TabFilamentos(ctk.CTkFrame):
         
         self.form_visible = False
         
-        # Toggle button
         from core.utils import ACCENT_COLOR
         self.toggle_btn = ctk.CTkButton(
             self, text="+ Cadastrar Novo Filamento",
@@ -162,7 +159,6 @@ class TabFilamentos(ctk.CTkFrame):
         )
         self.toggle_btn.pack(side="top", fill="x", padx=20, pady=(10, 0))
 
-        # Form Card (hidden by default)
         self.form_card = ModernCard(self, border_width=0)
         self.form_card.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
@@ -180,35 +176,43 @@ class TabFilamentos(ctk.CTkFrame):
         self.peso_var = ctk.StringVar(value="1.0")
         self.preco_var = ctk.StringVar()
         self.link_var = ctk.StringVar()
+        self.status_var = ctk.StringVar(value="Ativo")
 
         lbl_entry(self.form_card, 1, 0, "Marca", self.marca_var)
         lbl_entry(self.form_card, 1, 1, "Material", self.material_var)
         lbl_entry(self.form_card, 1, 2, "Cor", self.cor_var)
         lbl_entry(self.form_card, 1, 3, "Peso (KG)", self.peso_var)
+        
         lbl_entry(self.form_card, 2, 0, "Valor ($)", self.preco_var)
         lbl_entry(self.form_card, 2, 1, "Link", self.link_var)
+        
+        f_status = ctk.CTkFrame(self.form_card, fg_color="transparent")
+        f_status.grid(row=2, column=2, padx=10, sticky="ew")
+        ctk.CTkLabel(f_status, text="Status Inicial", text_color="gray", font=ctk.CTkFont(size=11)).pack(anchor="w")
+        ctk.CTkOptionMenu(f_status, variable=self.status_var, values=["Ativo", "Esgotado"], height=25).pack(fill="x")
 
         self._new_foto_filename = None
-        f5 = ctk.CTkFrame(self.form_card, fg_color="transparent"); f5.grid(row=2, column=2, padx=10, sticky="ew")
-        ctk.CTkLabel(f5, text="Foto", text_color="gray", font=ctk.CTkFont(size=11)).pack(anchor="w")
-        self.btn_foto = ctk.CTkButton(f5, text="Buscar", height=25, fg_color="#333", hover_color="#444", command=self._select_photo)
+        f_foto = ctk.CTkFrame(self.form_card, fg_color="transparent")
+        f_foto.grid(row=3, column=0, padx=10, pady=(10, 10), sticky="ew")
+        ctk.CTkLabel(f_foto, text="Foto", text_color="gray", font=ctk.CTkFont(size=11)).pack(anchor="w")
+        self.btn_foto = ctk.CTkButton(f_foto, text="Buscar", height=25, fg_color="#333", hover_color="#444", command=self._select_photo)
         self.btn_foto.pack(fill="x")
 
-        f6 = ctk.CTkFrame(self.form_card, fg_color="transparent"); f6.grid(row=2, column=3, padx=10, sticky="ew")
-        ctk.CTkLabel(f6, text="", font=ctk.CTkFont(size=11)).pack(anchor="w")
-        ctk.CTkButton(f6, text="Salvar", height=25, font=ctk.CTkFont(weight="bold"), command=self._save_filamento, fg_color=ACCENT_COLOR).pack(fill="x")
+        f_salvar = ctk.CTkFrame(self.form_card, fg_color="transparent")
+        f_salvar.grid(row=3, column=3, padx=10, pady=(10, 10), sticky="ew")
+        ctk.CTkLabel(f_salvar, text="", font=ctk.CTkFont(size=11)).pack(anchor="w")
+        ctk.CTkButton(f_salvar, text="Salvar", height=25, font=ctk.CTkFont(weight="bold"), command=self._save_filamento, fg_color=ACCENT_COLOR).pack(fill="x")
 
-        # Lists (tabview) — always below the form area
         self.tabview = ctk.CTkTabview(self, fg_color="transparent")
         self.tabview.pack(side="top", fill="both", expand=True, padx=20, pady=(5, 20))
         self.tab_ativos = self.tabview.add("Ativos")
-        self.tab_arq = self.tabview.add("Arquivados")
+        self.tab_esgot = self.tabview.add("Esgotados")
         
         self.list_frame = ctk.CTkScrollableFrame(self.tab_ativos, fg_color="transparent")
         self.list_frame.pack(fill="both", expand=True)
         
-        self.list_arq = ctk.CTkScrollableFrame(self.tab_arq, fg_color="transparent")
-        self.list_arq.pack(fill="both", expand=True)
+        self.list_esgot = ctk.CTkScrollableFrame(self.tab_esgot, fg_color="transparent")
+        self.list_esgot.pack(fill="both", expand=True)
         
         self.cards = {}
         self.col_count = 2
@@ -252,42 +256,32 @@ class TabFilamentos(ctk.CTkFrame):
             'caminho_foto': self._new_foto_filename,
             'link_compra': self.link_var.get(),
             'preco_rolo': preco,
+            'status': self.status_var.get(),
             'rolos_reserva': 0
         })
 
         for var in (self.marca_var, self.material_var, self.cor_var, self.link_var, self.preco_var): var.set("")
         self.peso_var.set("1.0")
+        self.status_var.set("Ativo")
         self._new_foto_filename = None
         self.btn_foto.configure(text="Buscar", fg_color="#333")
 
     def _on_state_change(self, event=None):
-        if event:
-            action = event.get('action')
-            f_id = event.get('id')
-            if action == 'update' and f_id in self.cards:
-                self.cards[f_id].update_data(event['data'])
-                return
-            elif action == 'remove' and f_id in self.cards:
-                self.cards[f_id].destroy()
-                del self.cards[f_id]
-                return
-
-        # Full rebuild (initial load or structural change)
         for w in self.cards.values(): w.destroy()
         self.cards = {}
         
         for c in range(self.col_count):
             self.list_frame.grid_columnconfigure(c, weight=1)
-            self.list_arq.grid_columnconfigure(c, weight=1)
+            self.list_esgot.grid_columnconfigure(c, weight=1)
             
         ativos = [d for d in app_state.filamentos if d['status'] == 'Ativo']
-        arquivados = [d for d in app_state.filamentos if d['status'] == 'Arquivado']
+        esgotados = [d for d in app_state.filamentos if d['status'] == 'Esgotado']
         
         for i, data in enumerate(ativos):
             self._add_card(data, i, self.list_frame)
             
-        for i, data in enumerate(arquivados):
-            self._add_card(data, i, self.list_arq)
+        for i, data in enumerate(esgotados):
+            self._add_card(data, i, self.list_esgot)
 
     def _add_card(self, data, index, parent_frame):
         card = FilamentoCard(parent_frame, data)

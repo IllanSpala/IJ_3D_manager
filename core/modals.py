@@ -344,7 +344,7 @@ class DetalhesModal(ctk.CTkToplevel):
 
         with db.get_connection() as conn:
             ativos = conn.execute(
-                "SELECT id, marca, material, cor FROM filamentos WHERE status != 'Arquivado'"
+                "SELECT id, marca, material, cor FROM filamentos WHERE status = 'Ativo'"
             ).fetchall()
         self._ativos_dict = {f"{r[1]} {r[2]} ({r[3]})": r[0] for r in ativos}
         vals = list(self._ativos_dict.keys()) or ["Nenhum"]

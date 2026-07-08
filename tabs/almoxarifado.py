@@ -6,7 +6,7 @@ from core.utils import load_and_resize_image, resolve_media_path, copy_to_media,
 
 class AlmoxarifadoCard(HorizontalInventoryCard):
     def __init__(self, master, data, **kwargs):
-        danger = data['quantidade_status'] in ("Comprar", "Falta")
+        danger = data['quantidade_status'] in ("Comprar", "Falta", "Esgotado")
         super().__init__(master, data, fg_color="#333", corner_radius=8, **kwargs)
         self.item_id = data['id']
 
@@ -18,8 +18,12 @@ class AlmoxarifadoCard(HorizontalInventoryCard):
         self.nome_entry = InlineEdit(top_row, data['nome'], self._make_saver('nome'), font=ctk.CTkFont(weight="bold", size=18))
         self.nome_entry.pack(side="left", fill="x", expand=True)
         
-        ctk.CTkButton(top_row, text="✕", width=30, height=25, fg_color="transparent",
-                      text_color="#d64545", command=self._delete).pack(side="right", padx=5)
+        if data['quantidade_status'] == 'Esgotado':
+            ctk.CTkButton(top_row, text="Retornar", width=70, height=25, fg_color="#2b7a4b",
+                          command=self._restore).pack(side="right", padx=5)
+        else:
+            ctk.CTkButton(top_row, text="✕", width=30, height=25, fg_color="transparent",
+                          text_color="#d64545", command=self._esgotar).pack(side="right", padx=5)
 
         ctk.CTkButton(top_row, text="+", width=30, height=25, fg_color="transparent", border_width=1, border_color="#555", hover_color="#333", command=self._open_detalhes).pack(side="right", padx=5)
 
@@ -27,7 +31,7 @@ class AlmoxarifadoCard(HorizontalInventoryCard):
         badge.pack(anchor="w", pady=(5, 5))
         
         self.status_var = ctk.StringVar(value=data['quantidade_status'])
-        self.status_menu = ctk.CTkOptionMenu(badge, variable=self.status_var, values=["Em estoque", "Comprar", "Falta"], 
+        self.status_menu = ctk.CTkOptionMenu(badge, variable=self.status_var, values=["Em estoque", "Comprar", "Falta", "Esgotado"], 
                                              command=self._update_status, height=25, font=ctk.CTkFont(size=12))
         self.status_menu.pack(side="left", padx=2, pady=2)
 
@@ -40,8 +44,6 @@ class AlmoxarifadoCard(HorizontalInventoryCard):
             ctk.CTkLabel(preco_frame, text="R$ ", text_color="#ccc", font=ctk.CTkFont(size=14)).pack(side="left")
             self.preco_entry = InlineEdit(preco_frame, data['ultimo_valor'], self._make_saver_float('ultimo_valor'), text_color="#ccc", is_double=True, font=ctk.CTkFont(size=14))
             self.preco_entry.pack(side="left")
-
-
 
         self._update_image()
 
@@ -78,14 +80,13 @@ class AlmoxarifadoCard(HorizontalInventoryCard):
                 return False
         return saver
 
-    def _delete(self):
-        if messagebox.askyesno("Confirmar", "Remover este item?"):
-            import sqlite3
-            from core.database import db
-            with db.get_connection() as conn:
-                conn.execute("DELETE FROM ferramentas_insumos WHERE id=?", (self.item_id,))
-                conn.commit()
-            app_state.load_almoxarifado()
+    def _esgotar(self):
+        if messagebox.askyesno("Confirmar", "Mover este item para esgotados?"):
+            app_state.update_almoxarifado(self.item_id, {'quantidade_status': 'Esgotado'})
+
+    def _restore(self):
+        if messagebox.askyesno("Confirmar", "Retornar este item ao estoque?"):
+            app_state.update_almoxarifado(self.item_id, {'quantidade_status': 'Em estoque'})
 
 class TabAlmoxarifado(ctk.CTkFrame):
     def __init__(self, parent):
@@ -122,7 +123,7 @@ class TabAlmoxarifado(ctk.CTkFrame):
 
         lrow(row1, 0, "Nome do Item", lambda f: ctk.CTkEntry(f, textvariable=self.nome_var, placeholder_text="Ex: Lixa d'água 400").pack(fill="x"))
         lrow(row1, 1, "Categoria", lambda f: ctk.CTkOptionMenu(f, variable=self.cat_var, values=["Ferramenta","Insumo","Peça Reposição"]).pack(fill="x"))
-        lrow(row1, 2, "Situação", lambda f: ctk.CTkOptionMenu(f, variable=self.status_var, values=["Em estoque","Comprar","Falta"]).pack(fill="x"))
+        lrow(row1, 2, "Situação", lambda f: ctk.CTkOptionMenu(f, variable=self.status_var, values=["Em estoque","Comprar","Falta","Esgotado"]).pack(fill="x"))
 
         row2 = ctk.CTkFrame(self.form_card, fg_color="transparent")
         row2.pack(fill="x", padx=20, pady=5)
@@ -138,10 +139,16 @@ class TabAlmoxarifado(ctk.CTkFrame):
 
         ctk.CTkButton(self.form_card, text="Salvar Item", height=40, font=ctk.CTkFont(weight="bold"), fg_color=ACCENT_COLOR, command=self._save).pack(fill="x", padx=25, pady=(15, 20))
 
-        self.list_frame = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        self.list_frame.pack(side="top", fill="both", expand=True, padx=20, pady=20)
-        self.list_frame.grid_columnconfigure(0, weight=1)
-        self.list_frame.grid_columnconfigure(1, weight=1)
+        self.tabview = ctk.CTkTabview(self, fg_color="transparent")
+        self.tabview.pack(side="top", fill="both", expand=True, padx=20, pady=20)
+        self.tab_ativos = self.tabview.add("Ativos")
+        self.tab_esgot = self.tabview.add("Esgotados")
+
+        self.list_frame = ctk.CTkScrollableFrame(self.tab_ativos, fg_color="transparent")
+        self.list_frame.pack(fill="both", expand=True)
+
+        self.list_esgot = ctk.CTkScrollableFrame(self.tab_esgot, fg_color="transparent")
+        self.list_esgot.pack(fill="both", expand=True)
         
         self.cards = {}
         self.col_count = 2
@@ -154,9 +161,9 @@ class TabAlmoxarifado(ctk.CTkFrame):
             self.form_card.pack_forget()
             self.toggle_btn.configure(text="+ Adicionar Novo Item")
         else:
-            self.list_frame.pack_forget()
+            self.tabview.pack_forget()
             self.form_card.pack(side="top", fill="x", padx=20, pady=(5, 5))
-            self.list_frame.pack(side="top", fill="both", expand=True, padx=20, pady=20)
+            self.tabview.pack(side="top", fill="both", expand=True, padx=20, pady=20)
             self.toggle_btn.configure(text="- Ocultar Formulario")
         self.form_visible = not self.form_visible
 
@@ -188,26 +195,23 @@ class TabAlmoxarifado(ctk.CTkFrame):
         app_state.load_almoxarifado()
 
     def _on_state_change(self, event=None):
-        if event:
-            action = event.get('action')
-            i_id = event.get('id')
-            if action == 'update' and i_id in self.cards:
-                self.cards[i_id].update_data(event['data'])
-                return
-            elif action == 'remove' and i_id in self.cards:
-                self.cards[i_id].destroy()
-                del self.cards[i_id]
-                return
-
-        # Full rebuild (initial load or structural change)
         for w in self.cards.values(): w.destroy()
         self.cards = {}
-        for i, data in enumerate(app_state.almoxarifado):
-            self._add_card(data, i)
+        
+        self.list_frame.grid_columnconfigure((0, 1), weight=1)
+        self.list_esgot.grid_columnconfigure((0, 1), weight=1)
 
-    def _add_card(self, data, index):
-        card = AlmoxarifadoCard(self.list_frame, data)
+        ativos = [d for d in app_state.almoxarifado if d['quantidade_status'] != 'Esgotado']
+        esgotados = [d for d in app_state.almoxarifado if d['quantidade_status'] == 'Esgotado']
+
+        for i, data in enumerate(ativos):
+            self._add_card(data, i, self.list_frame)
+
+        for i, data in enumerate(esgotados):
+            self._add_card(data, i, self.list_esgot)
+
+    def _add_card(self, data, index, parent_frame):
+        card = AlmoxarifadoCard(parent_frame, data)
         r, c = divmod(index, self.col_count)
         card.grid(row=r, column=c, sticky="nsew", padx=10, pady=10)
         self.cards[data['id']] = card
-
