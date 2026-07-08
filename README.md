@@ -50,9 +50,9 @@ Desenvolvido em **Python 3.11+** com **CustomTkinter**, banco de dados **SQLite*
 - Modo avulso: teste sem peça cadastrada
 - Salvar teste diretamente no Acervo
 
-### ⚙ Almoxarifado / Manutenção
+### ⚙ Almoxarifado
 - Inventário de ferramentas e insumos
-- Checklist de manutenção preventiva com intervalos configuráveis
+
 
 ---
 
