@@ -46,8 +46,8 @@ class App(ctk.CTk):
         ctk.set_widget_scaling(ui_scale)
         ctk.set_window_scaling(ui_scale)
 
-        # Janela começa maximizada
-        self.geometry(f"{sw}x{sh}+0+0")
+        # Janela começa maximizada / adaptada para 4k
+        self.geometry("3840x2160+0+0")
 
         # ── Critical: intercept the close button ──
         self.protocol("WM_DELETE_WINDOW", self._on_close)

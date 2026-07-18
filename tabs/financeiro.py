@@ -531,22 +531,24 @@ class TabFinanceiro(ctk.CTkFrame):
         self.btn_acao_acervo.grid_remove()   # oculto até haver contexto
 
         # Piece selector (normal mode)
-        sel_row = ctk.CTkFrame(f_in, fg_color="transparent")
+        sel_row = ctk.CTkFrame(f_in, fg_color="#1e1e2e", corner_radius=12)
         sel_row.grid(row=1, column=0, sticky="ew", pady=8)
-        sel_row.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(sel_row, text="Selecione a Peça / Kit:").grid(
-            row=0, column=0, sticky="e", padx=(0, 8))
+        sel_row.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(sel_row, text="🔎 Selecione a Peça / Kit", font=ctk.CTkFont(size=14, weight="bold"), text_color="#a6e3a1").pack(anchor="w", padx=15, pady=(10,5))
+        
+        inner_sel = ctk.CTkFrame(sel_row, fg_color="transparent")
+        inner_sel.pack(fill="x", padx=15, pady=(0, 15))
+        inner_sel.grid_columnconfigure(0, weight=1)
+        
         self.acervo_dict = self._get_acervo()
         self.peca_combo = ctk.CTkComboBox(
-            sel_row, values=list(self.acervo_dict.keys()) if self.acervo_dict else ["Nenhuma Peça"],
-            command=self._on_peca_selected
+            inner_sel, values=list(self.acervo_dict.keys()) if self.acervo_dict else ["Nenhuma Peça"],
+            command=self._on_peca_selected,
+            height=40, font=ctk.CTkFont(size=14),
+            fg_color="#181825", border_color="#313244", dropdown_fg_color="#1e1e2e", dropdown_hover_color="#313244"
         )
-        self.peca_combo.grid(row=0, column=1, sticky="ew")
-        _make_info_btn(sel_row,
-            "Selecione uma peça cadastrada no Acervo ou um Kit.\n"
-            "O custo de material será calculado automaticamente\n"
-            "com base nos filamentos vinculados e seus preços de rolo."
-        ).grid(row=0, column=2, padx=(6, 0))
+        self.peca_combo.grid(row=0, column=0, sticky="ew")
+        
         self._sel_row_widget = sel_row
 
         # Manual test panel (hidden initially)

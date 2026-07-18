@@ -53,12 +53,7 @@ class AcervoCard(HorizontalInventoryCard):
         self.nome_entry.grid(row=0, column=0, sticky="ew")
 
         # Action buttons — icon only
-        # col 1: print count  col 2: −(falha)  col 3: ⚙(detalhes)  col 4: ✕(delete)  col 5: +(impressão)
-        self.count_label = ctk.CTkLabel(
-            top_bar, text=f"🖨 {data.get('total_impressoes', 0)}",
-            font=ctk.CTkFont(weight="bold", size=12), text_color="#aaa"
-        )
-        self.count_label.grid(row=0, column=1, padx=(10, 4))
+        # Removed print count label
 
         ctk.CTkButton(top_bar, text="−", width=28, height=26,
                       fg_color="#7a2b2b", hover_color="#5c1d1d",
@@ -122,7 +117,6 @@ class AcervoCard(HorizontalInventoryCard):
         self.data = data
         self.nome_entry.delete(0, 'end')
         self.nome_entry.insert(0, data['nome_peca'])
-        self.count_label.configure(text=f"🖨 {data.get('total_impressoes', 0)}")
         # Atualiza label de tempo/custo se existir
         if self.info_label and self.info_label.winfo_exists():
             tempo = data.get('tempo_impressao') or ''
@@ -352,6 +346,23 @@ class TabAcervo(ctk.CTkFrame):
                       fg_color=ACCENT_COLOR, command=self._save_peca).grid(
             row=5, column=0, columnspan=2, padx=15, pady=(15, 15), sticky="ew")
 
+        header = ctk.CTkFrame(self, fg_color="transparent")
+        header.pack(side="top", fill="x", padx=20, pady=(20, 0))
+        header.grid_columnconfigure(0, weight=1)
+
+        title = ctk.CTkLabel(header, text="Acervo de Peças", font=ctk.CTkFont(size=24, weight="bold"))
+        title.grid(row=0, column=0, sticky="w")
+        
+        self.search_var = ctk.StringVar()
+        self.search_var.trace_add("write", lambda *args: self._on_state_change())
+        search_entry = ctk.CTkEntry(header, textvariable=self.search_var, placeholder_text="🔍 Pesquisar peça...", width=300, height=36, fg_color="#181825", border_color="#313244")
+        search_entry.grid(row=0, column=1, sticky="e", padx=(0, 20))
+
+        btn_add = ctk.CTkButton(header, text="+ Nova Peça", width=120, height=36,
+                                font=ctk.CTkFont(weight="bold"), fg_color=ACCENT_COLOR,
+                                command=self._toggle_form)
+        btn_add.grid(row=0, column=2, sticky="e")
+
         self.list_frame = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.list_frame.pack(side="top", fill="both", expand=True, padx=20, pady=10)
         self.cards = {}
@@ -524,8 +535,14 @@ class TabAcervo(ctk.CTkFrame):
         if event and event.get('action') in ('add', 'update', 'remove'):
             pass
 
+        query = self.search_var.get().strip().lower()
+        if query:
+            filtered_acervo = [p for p in app_state.acervo if query in p['nome_peca'].lower()]
+        else:
+            filtered_acervo = app_state.acervo
+
         limit = self._current_page * self._page_size
-        items = app_state.acervo[:limit]
+        items = filtered_acervo[:limit]
         
         loaded_pids = {data['id'] for data in items}
         
@@ -545,7 +562,7 @@ class TabAcervo(ctk.CTkFrame):
         if getattr(self, '_load_more_frame', None) and self._load_more_frame.winfo_exists():
             self._load_more_frame.destroy()
 
-        if len(app_state.acervo) > limit:
+        if len(filtered_acervo) > limit:
             self._load_more_frame = ctk.CTkFrame(self.list_frame, fg_color="transparent")
             self._load_more_frame.pack(fill="x", pady=10)
             ctk.CTkButton(self._load_more_frame, text="Carregar Mais", command=self._load_next_page, fg_color="#2a2a4a", hover_color="#3a3a6a").pack()

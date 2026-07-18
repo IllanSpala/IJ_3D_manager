@@ -132,26 +132,19 @@ class _FilamentoRow(ctk.CTkFrame):
 
         self.fil_var = ctk.StringVar()
         opts = ["Customizado"] + [f"{f[1]} {f[2]} ({f[3]})" for f in filamentos_db]
-        self.fil_opt = ctk.CTkComboBox(self, variable=self.fil_var, values=opts, width=220)
-        self.fil_opt.grid(row=0, column=0, padx=5, pady=(8, 0))
+        self.fil_opt = ctk.CTkComboBox(self, variable=self.fil_var, values=opts, width=200)
+        self.fil_opt.grid(row=0, column=0, padx=5, pady=5)
 
         self.modelo_var = ctk.StringVar(value="0.0")
         self.purga_var = ctk.StringVar(value="0.0")
         self.torre_var = ctk.StringVar(value="0.0")
 
-        ctk.CTkLabel(self, text="Modelo (g)", font=ctk.CTkFont(size=10),
-                     text_color="#888").grid(row=0, column=1, padx=5, pady=(8, 0), sticky="w")
-        ctk.CTkLabel(self, text="Purga (g)", font=ctk.CTkFont(size=10),
-                     text_color="#888").grid(row=0, column=2, padx=5, pady=(8, 0), sticky="w")
-        ctk.CTkLabel(self, text="Torre (g)", font=ctk.CTkFont(size=10),
-                     text_color="#888").grid(row=0, column=3, padx=5, pady=(8, 0), sticky="w")
+        ctk.CTkEntry(self, textvariable=self.modelo_var, width=70, placeholder_text="Modelo").grid(row=0, column=1, padx=5, pady=5)
+        ctk.CTkEntry(self, textvariable=self.purga_var,  width=70, placeholder_text="Purga").grid(row=0, column=2, padx=5, pady=5)
+        ctk.CTkEntry(self, textvariable=self.torre_var,  width=70, placeholder_text="Torre").grid(row=0, column=3, padx=5, pady=5)
 
-        ctk.CTkEntry(self, textvariable=self.modelo_var, width=75).grid(row=1, column=1, padx=5, pady=(0, 6))
-        ctk.CTkEntry(self, textvariable=self.purga_var,  width=75).grid(row=1, column=2, padx=5, pady=(0, 6))
-        ctk.CTkEntry(self, textvariable=self.torre_var,  width=75).grid(row=1, column=3, padx=5, pady=(0, 6))
-
-        ctk.CTkButton(self, text="X", width=30, fg_color=_RED, hover_color="#8a2020",
-                      command=lambda: onDelete(self)).grid(row=0, column=4, rowspan=2, padx=5)
+        ctk.CTkButton(self, text="X", width=28, fg_color=_RED, hover_color="#8a2020",
+                      command=lambda: onDelete(self)).grid(row=0, column=4, padx=5, pady=5)
 
         if data:
             if data.get('filamento_id'):
@@ -197,7 +190,7 @@ class _DetalhesHistoricoModal(ctk.CTkToplevel):
     def __init__(self, master):
         super().__init__(master)
         self.title("Detalhes da Impressão")
-        self.geometry("820x720")
+        self.geometry("1100x850")
         self.configure(fg_color=APP_BG_COLOR)
         self.resizable(True, True)
         self.withdraw()
@@ -251,21 +244,9 @@ class _DetalhesHistoricoModal(ctk.CTkToplevel):
         self.status_var = ctk.StringVar()
         ctk.CTkComboBox(f_info, variable=self.status_var, values=["Sucesso", "Falha", "Cancelado", "Remake", "Pausado"]).grid(row=4, column=1, sticky="w", **pad)
         
-        ctk.CTkLabel(f_info, text="Preço Venda (R$):").grid(row=5, column=0, sticky="e", **pad)
-        self.preco_var = ctk.StringVar()
-        ctk.CTkEntry(f_info, textvariable=self.preco_var).grid(row=5, column=1, sticky="ew", **pad)
-        
-        ctk.CTkLabel(f_info, text="Conf. Fatiador:").grid(row=6, column=0, sticky="e", **pad)
-        self.conf_var = ctk.StringVar()
-        ctk.CTkEntry(f_info, textvariable=self.conf_var).grid(row=6, column=1, sticky="ew", **pad)
-        
-        ctk.CTkLabel(f_info, text="Arq. 3D:").grid(row=7, column=0, sticky="e", **pad)
-        self.arq_var = ctk.StringVar()
-        ctk.CTkEntry(f_info, textvariable=self.arq_var).grid(row=7, column=1, sticky="ew", **pad)
-        
-        ctk.CTkLabel(f_info, text="Observação:").grid(row=8, column=0, sticky="ne", **pad)
+        ctk.CTkLabel(f_info, text="Observação:").grid(row=5, column=0, sticky="ne", **pad)
         self.obs_txt = ctk.CTkTextbox(f_info, height=60, fg_color="#222")
-        self.obs_txt.grid(row=8, column=1, sticky="ew", **pad)
+        self.obs_txt.grid(row=5, column=1, sticky="ew", **pad)
         
         # 2. Filamentos
         fil_frame = ctk.CTkFrame(self.scroll, fg_color="#1a1a1a", border_width=1, border_color=BORDER_COLOR)
@@ -396,10 +377,7 @@ class _DetalhesHistoricoModal(ctk.CTkToplevel):
                     self.data_var.set(h[2] or "")
                     self.tempo_var.set(h[3] or "")
                     self.status_var.set(h[4] or "Sucesso")
-                    self.preco_var.set(str(h[5]) if h[5] is not None else "")
                     self.obs_txt.insert("1.0", h[6] or "")
-                    self.conf_var.set(h[7] or "")
-                    self.arq_var.set(h[8] or "")
                     
                 fils = conn.execute("SELECT filamento_id, peso_modelo_g, peso_purga_g, peso_torre_g FROM hist_filamentos WHERE hist_id=?", (hist_id,)).fetchall()
                 for f in fils:
@@ -431,15 +409,9 @@ class _DetalhesHistoricoModal(ctk.CTkToplevel):
         tempo_imp = self.tempo_var.get().strip()
         status = self.status_var.get()
         obs = self.obs_txt.get("1.0", "end-1c").strip()
-        conf = self.conf_var.get().strip()
-        arq = self.arq_var.get().strip()
-        
-        try:
-            preco_str = self.preco_var.get().strip().replace(',', '.')
-            preco = float(preco_str) if preco_str else None
-        except ValueError:
-            messagebox.showerror("Erro", "Preço deve ser numérico.")
-            return
+        preco = None
+        conf = None
+        arq = None
 
         with db.get_connection() as conn:
             c = conn.cursor()
