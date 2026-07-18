@@ -45,57 +45,55 @@ def _map_cor_hex(cor: str) -> str:
     if not cor:
         return "#555"
     chave = cor.strip().lower()
-    # Busca direta
     if chave in _COR_MAP:
         return _COR_MAP[chave]
-    # Busca por substring
     for k, v in _COR_MAP.items():
         if k in chave:
             return v
-    # Se começar com # assume hex direto
     if chave.startswith("#"):
         return cor
     return "#555"
 
 def _migrate_old_history():
     """Migra dados da antiga acervo_impressoes para hist_impressoes na primeira vez."""
-    with db.get_connection() as conn:
-        count = conn.execute("SELECT COUNT(*) FROM hist_impressoes").fetchone()[0]
-        if count == 0:
-            # Verifica se existem dados antigos
-            try:
-                old_imps = conn.execute("SELECT id, acervo_id, data_impressao, tempo_impressao, status, preco_venda, observacao FROM acervo_impressoes").fetchall()
-            except Exception:
-                old_imps = []
-                
-            for imp in old_imps:
-                old_id, acervo_id, data_imp, tempo_imp, status, preco, obs = imp
-                if acervo_id:
-                    acervo = conn.execute("SELECT nome_peca, config_fatiador, arquivo_3d FROM acervo WHERE id=?", (acervo_id,)).fetchone()
-                    if acervo:
-                        nome_peca, config_fat, arq_3d = acervo
+    try:
+        with db.get_connection() as conn:
+            count = conn.execute("SELECT COUNT(*) FROM hist_impressoes").fetchone()[0]
+            if count == 0:
+                try:
+                    old_imps = conn.execute("SELECT id, acervo_id, data_impressao, tempo_impressao, status, preco_venda, observacao FROM acervo_impressoes").fetchall()
+                except Exception:
+                    old_imps = []
+                    
+                for imp in old_imps:
+                    old_id, acervo_id, data_imp, tempo_imp, status, preco, obs = imp
+                    if acervo_id:
+                        acervo = conn.execute("SELECT nome_peca, config_fatiador, arquivo_3d FROM acervo WHERE id=?", (acervo_id,)).fetchone()
+                        if acervo:
+                            nome_peca, config_fat, arq_3d = acervo
+                        else:
+                            nome_peca, config_fat, arq_3d = f"Acervo #{acervo_id}", "", ""
                     else:
-                        nome_peca, config_fat, arq_3d = f"Acervo #{acervo_id}", "", ""
-                else:
-                    nome_peca, config_fat, arq_3d = "Desconhecido", "", ""
-                
-                c = conn.cursor()
-                c.execute('''INSERT INTO hist_impressoes 
-                             (acervo_id, nome_peca, data_impressao, tempo_impressao, status, preco_venda, observacao, config_fatiador, arquivo_3d)
-                             VALUES (?,?,?,?,?,?,?,?,?)''', 
-                             (acervo_id, nome_peca, data_imp, tempo_imp, status, preco, obs, config_fat, arq_3d))
-                new_hist_id = c.lastrowid
-                
-                if acervo_id:
-                    old_fils = conn.execute("SELECT filamento_id, peso_gasto, peso_desperdicio, peso_torre FROM acervo_filamentos WHERE acervo_id=?", (acervo_id,)).fetchall()
-                    for fil in old_fils:
-                        f_id, p_gasto, p_desp, p_torre = fil
-                        # Os pesos antigos estavam em KG, para histórico geral guardamos em gramas.
-                        c.execute('''INSERT INTO hist_filamentos
-                                     (hist_id, filamento_id, peso_modelo_g, peso_purga_g, peso_torre_g)
-                                     VALUES (?,?,?,?,?)''',
-                                     (new_hist_id, f_id, (p_gasto or 0)*1000, (p_desp or 0)*1000, (p_torre or 0)*1000))
-            conn.commit()
+                        nome_peca, config_fat, arq_3d = "Desconhecido", "", ""
+                    
+                    c = conn.cursor()
+                    c.execute('''INSERT INTO hist_impressoes 
+                                 (acervo_id, nome_peca, data_impressao, tempo_impressao, status, preco_venda, observacao, config_fatiador, arquivo_3d)
+                                 VALUES (?,?,?,?,?,?,?,?,?)''', 
+                                 (acervo_id, nome_peca, data_imp, tempo_imp, status, preco, obs, config_fat, arq_3d))
+                    new_hist_id = c.lastrowid
+                    
+                    if acervo_id:
+                        old_fils = conn.execute("SELECT filamento_id, peso_gasto, peso_desperdicio, peso_torre FROM acervo_filamentos WHERE acervo_id=?", (acervo_id,)).fetchall()
+                        for fil in old_fils:
+                            f_id, p_gasto, p_desp, p_torre = fil
+                            c.execute('''INSERT INTO hist_filamentos
+                                         (hist_id, filamento_id, peso_modelo_g, peso_purga_g, peso_torre_g)
+                                         VALUES (?,?,?,?,?)''',
+                                         (new_hist_id, f_id, (p_gasto or 0)*1000, (p_desp or 0)*1000, (p_torre or 0)*1000))
+                conn.commit()
+    except Exception as e:
+        print(f"Erro ao migrar histórico: {e}")
 
 
 class _BiScroll(ctk.CTkFrame):
@@ -134,14 +132,13 @@ class _FilamentoRow(ctk.CTkFrame):
 
         self.fil_var = ctk.StringVar()
         opts = ["Customizado"] + [f"{f[1]} {f[2]} ({f[3]})" for f in filamentos_db]
-        self.fil_opt = ctk.CTkOptionMenu(self, variable=self.fil_var, values=opts, width=220)
+        self.fil_opt = ctk.CTkComboBox(self, variable=self.fil_var, values=opts, width=220)
         self.fil_opt.grid(row=0, column=0, padx=5, pady=(8, 0))
 
         self.modelo_var = ctk.StringVar(value="0.0")
         self.purga_var = ctk.StringVar(value="0.0")
         self.torre_var = ctk.StringVar(value="0.0")
 
-        # Rótulos independentes acima das caixas
         ctk.CTkLabel(self, text="Modelo (g)", font=ctk.CTkFont(size=10),
                      text_color="#888").grid(row=0, column=1, padx=5, pady=(8, 0), sticky="w")
         ctk.CTkLabel(self, text="Purga (g)", font=ctk.CTkFont(size=10),
@@ -168,7 +165,6 @@ class _FilamentoRow(ctk.CTkFrame):
             self.purga_var.set(str(data.get('peso_purga_g', 0)))
             self.torre_var.set(str(data.get('peso_torre_g', 0)))
 
-
     def get_data(self):
         sel = self.fil_var.get()
         fil_id = None
@@ -192,6 +188,12 @@ class _FilamentoRow(ctk.CTkFrame):
 
 
 class _DetalhesHistoricoModal(ctk.CTkToplevel):
+    def iconbitmap(self, bitmap=None, default=None):
+        try:
+            super().iconbitmap(bitmap, default)
+        except Exception:
+            pass
+
     def __init__(self, master):
         super().__init__(master)
         self.title("Detalhes da Impressão")
@@ -206,9 +208,20 @@ class _DetalhesHistoricoModal(ctk.CTkToplevel):
         self.filamentos_db = []
         self.acervo_db = []
         
+        # Arquitetura GRID garantindo a barra de botões sempre fixa na base
+        self.grid_rowconfigure(0, weight=1) 
+        self.grid_columnconfigure(0, weight=1)
+
         self.scroll = ctk.CTkScrollableFrame(self, fg_color=APP_BG_COLOR)
-        self.scroll.pack(fill="both", expand=True, padx=0, pady=0)
+        self.scroll.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
         self.scroll.grid_columnconfigure(1, weight=1)
+
+        btn_frame = ctk.CTkFrame(self, fg_color="#1c1c1c", height=60, corner_radius=0)
+        btn_frame.grid(row=1, column=0, sticky="ew")
+        btn_frame.pack_propagate(False)
+
+        ctk.CTkButton(btn_frame, text="Cancelar", fg_color="transparent", border_color="#555", border_width=1, command=self.withdraw).pack(side="left", padx=20, pady=12)
+        ctk.CTkButton(btn_frame, text="💾 SALVAR IMPRESSÃO", fg_color=ACCENT_COLOR, hover_color="#007acc", font=ctk.CTkFont(weight="bold", size=14), command=self._save).pack(side="right", padx=20, pady=12)
 
         pad = dict(padx=16, pady=(8, 4))
         
@@ -219,7 +232,7 @@ class _DetalhesHistoricoModal(ctk.CTkToplevel):
         
         ctk.CTkLabel(f_info, text="Origem (Acervo):").grid(row=0, column=0, sticky="e", **pad)
         self.origem_var = ctk.StringVar()
-        self.origem_opt = ctk.CTkOptionMenu(f_info, variable=self.origem_var, command=self._on_origem_change)
+        self.origem_opt = ctk.CTkComboBox(f_info, variable=self.origem_var, command=self._on_origem_change)
         self.origem_opt.grid(row=0, column=1, sticky="ew", **pad)
         
         ctk.CTkLabel(f_info, text="Peça / Modelo:").grid(row=1, column=0, sticky="e", **pad)
@@ -236,7 +249,7 @@ class _DetalhesHistoricoModal(ctk.CTkToplevel):
         
         ctk.CTkLabel(f_info, text="Status:").grid(row=4, column=0, sticky="e", **pad)
         self.status_var = ctk.StringVar()
-        ctk.CTkOptionMenu(f_info, variable=self.status_var, values=["Sucesso", "Falha", "Cancelado", "Remake", "Pausado"]).grid(row=4, column=1, sticky="w", **pad)
+        ctk.CTkComboBox(f_info, variable=self.status_var, values=["Sucesso", "Falha", "Cancelado", "Remake", "Pausado"]).grid(row=4, column=1, sticky="w", **pad)
         
         ctk.CTkLabel(f_info, text="Preço Venda (R$):").grid(row=5, column=0, sticky="e", **pad)
         self.preco_var = ctk.StringVar()
@@ -265,7 +278,7 @@ class _DetalhesHistoricoModal(ctk.CTkToplevel):
         self.fil_list_frame.grid_columnconfigure(0, weight=1)
         self.fil_rows = []
         
-        ctk.CTkButton(fil_frame, text="+ Adicionar Filamento", command=self._add_fil_row, width=150, fg_color="#2d2d44", hover_color="#3d3d5c").grid(row=2, column=0, padx=16, pady=10, sticky="w")
+        ctk.CTkButton(fil_frame, text="➕ Adicionar Filamento", command=self._add_fil_row, width=150, fg_color="#2d2d44", hover_color="#3d3d5c").grid(row=2, column=0, padx=16, pady=10, sticky="w")
         
         # 3. Fotos
         foto_frame = ctk.CTkFrame(self.scroll, fg_color="#1a1a1a", border_width=1, border_color=BORDER_COLOR)
@@ -277,10 +290,10 @@ class _DetalhesHistoricoModal(ctk.CTkToplevel):
         self.foto_gallery.grid(row=1, column=0, sticky="ew", padx=16, pady=5)
         self.foto_rows = []
         
-        ctk.CTkButton(foto_frame, text="+ Adicionar Foto", command=self._add_foto, width=150, fg_color="#2d2d44", hover_color="#3d3d5c").grid(row=2, column=0, padx=16, pady=10, sticky="w")
+        ctk.CTkButton(foto_frame, text="➕ Adicionar Foto", command=self._add_foto, width=150, fg_color="#2d2d44", hover_color="#3d3d5c").grid(row=2, column=0, padx=16, pady=10, sticky="w")
         
-        # Save Button
-        ctk.CTkButton(self.scroll, text="💾 SALVAR IMPRESSÃO", fg_color=ACCENT_COLOR, hover_color="#007acc", font=ctk.CTkFont(weight="bold", size=14), height=44, command=self._save).grid(row=3, column=0, columnspan=2, sticky="ew", padx=16, pady=(16, 30))
+        # Pad vazio final para margem
+        ctk.CTkFrame(self.scroll, height=20, fg_color="transparent").grid(row=3, column=0)
         
     def _on_origem_change(self, val):
         if val == "Customizado": return
@@ -356,7 +369,6 @@ class _DetalhesHistoricoModal(ctk.CTkToplevel):
             
         self.origem_opt.configure(values=["Customizado"] + [f"{a[1]} (#{a[0]})" for a in self.acervo_db])
         
-        # Reset default fields
         self.origem_var.set("Customizado")
         self.peca_var.set("")
         self.data_var.set(datetime.datetime.now().strftime("%Y-%m-%d"))
@@ -449,7 +461,6 @@ class _DetalhesHistoricoModal(ctk.CTkToplevel):
             for fr in self.foto_rows:
                 path = fr._photo_path
                 if not path.startswith("media"):
-                    # copy to media dir
                     ext = os.path.splitext(path)[1]
                     new_name = f"hist_{int(datetime.datetime.now().timestamp() * 1000)}{ext}"
                     dest_dir = os.path.join(MEDIA_DIR, "hist_fotos")
@@ -524,7 +535,6 @@ class TabHistorico(ctk.CTkFrame):
 
         ctk.CTkButton(filt, text="⟳ Atualizar", width=100, fg_color="#2a2a4a", hover_color="#3a3a6a", command=self._refresh).pack(side="left")
 
-        # Altura dinâmica: 75% da altura de tela disponível
         try:
             _sh = self.winfo_screenheight()
         except Exception:
@@ -533,7 +543,6 @@ class TabHistorico(ctk.CTkFrame):
         self._scroll.grid(row=1, column=0, sticky="nsew", padx=8, pady=(0, 8))
 
         t = self._scroll.inner
-        # Pesos de expansão: colunas maiores expandem mais
         _weights = [1, 2, 1, 4, 1, 1, 1, 2]
         for ci, (minw_weight, col) in enumerate(zip(_weights, self._COLS)):
             t.grid_columnconfigure(ci, weight=minw_weight, minsize=col[1])
@@ -554,6 +563,7 @@ class TabHistorico(ctk.CTkFrame):
 
     def _load_data(self):
         with db.get_connection() as conn:
+            # Protegido contra quebras violentas com dados nulos passados
             rows = conn.execute("SELECT id, nome_peca, data_impressao, tempo_impressao, status, preco_venda, observacao, config_fatiador, arquivo_3d FROM hist_impressoes ORDER BY id DESC").fetchall()
             
             res = []
@@ -563,14 +573,19 @@ class TabHistorico(ctk.CTkFrame):
                                        FROM hist_filamentos hf LEFT JOIN filamentos f ON hf.filamento_id = f.id WHERE hf.hist_id=?""", (hid,)).fetchall()
                 fotos_count = conn.execute("SELECT COUNT(*) FROM hist_fotos WHERE hist_id=?", (hid,)).fetchone()[0]
                 
-                fil_data = []  # lista de dicts com cor_hex, nome e total_g por cor
-                total_g_geral = 0
+                fil_data = [] 
+                total_g_geral = 0.0
                 for f in fils:
                     nome = f"{f[0]} {f[1]} ({f[2]})" if f[0] else "Customizado"
                     cor_str = f[2] or ""
-                    mod = f[3] or 0
-                    pur = f[4] or 0
-                    tor = f[5] or 0
+                    
+                    try: mod = float(f[3]) if f[3] not in (None, "") else 0.0
+                    except ValueError: mod = 0.0
+                    try: pur = float(f[4]) if f[4] not in (None, "") else 0.0
+                    except ValueError: pur = 0.0
+                    try: tor = float(f[5]) if f[5] not in (None, "") else 0.0
+                    except ValueError: tor = 0.0
+                    
                     total_cor = mod + pur + tor
                     total_g_geral += total_cor
                     fil_data.append({
@@ -580,13 +595,16 @@ class TabHistorico(ctk.CTkFrame):
                         'mod': mod, 'pur': pur, 'tor': tor,
                     })
                 
+                try: preco_val = float(str(r[5]).replace(',', '.')) if r[5] not in (None, "") else None
+                except ValueError: preco_val = None
+
                 res.append({
                     'id': hid,
-                    'nome_peca': r[1] or "—",
-                    'data': r[2] or "—",
-                    'tempo': r[3] or "",
-                    'status': r[4] or "Sucesso",
-                    'preco': r[5],
+                    'nome_peca': str(r[1] or "—"),
+                    'data': str(r[2] or "—"),
+                    'tempo': str(r[3] or ""),
+                    'status': str(r[4] or "Sucesso"),
+                    'preco': preco_val,
                     'fil_data': fil_data,
                     'total_g': total_g_geral,
                     'fotos': fotos_count > 0
@@ -623,7 +641,6 @@ class TabHistorico(ctk.CTkFrame):
                              anchor=anchor if anchor != "center" else "center")
                 return cf
 
-            # Col 0: Data/Tempo
             cf0 = ctk.CTkFrame(t, fg_color=bg, corner_radius=0)
             cf0.grid(row=gr, column=0, sticky="nsew", padx=1, pady=0)
             ctk.CTkLabel(cf0, text=_fmt_date(d["data"]), text_color="#aaa",
@@ -634,12 +651,9 @@ class TabHistorico(ctk.CTkFrame):
                              font=ctk.CTkFont(size=10), anchor="w").pack(padx=6, pady=(0, 4), anchor="w")
             row_refs.append(cf0)
 
-            # Col 1: Peça
             row_refs.append(_cell(1, d["nome_peca"], "#fff"))
-            # Col 2: Status
             row_refs.append(_cell(2, d["status"], _status_color(d["status"]), anchor="center"))
 
-            # Col 3: Filamentos com swatch + total por cor
             cf3 = ctk.CTkFrame(t, fg_color=bg, corner_radius=0)
             cf3.grid(row=gr, column=3, sticky="nsew", padx=1, pady=2)
             if d["fil_data"]:
@@ -658,18 +672,12 @@ class TabHistorico(ctk.CTkFrame):
                              font=ctk.CTkFont(size=10)).pack(padx=6, pady=4)
             row_refs.append(cf3)
 
-            # Col 4: Total
             row_refs.append(_cell(4, f"{d['total_g']:.1f}", _BLUE, anchor="e"))
-
-            # Col 5: Preço
             ptxt = f"R$ {d['preco']:.2f}" if d['preco'] is not None else "—"
-            row_refs.append(_cell(5, ptxt, "#a6e3a1" if d['preco'] else "#555", anchor="e"))
-
-            # Col 6: Fotos
+            row_refs.append(_cell(5, ptxt, "#a6e3a1" if d['preco'] is not None else "#555", anchor="e"))
             row_refs.append(_cell(6, "📷" if d["fotos"] else "—",
                                   "#fff" if d["fotos"] else "#555", anchor="center"))
 
-            # Col 7: Ações (Detalhes + Editar + Excluir)
             af = ctk.CTkFrame(t, fg_color=bg, corner_radius=0)
             af.grid(row=gr, column=7, sticky="nsew", padx=1, pady=0)
             hid = d["id"]
@@ -709,7 +717,6 @@ class TabHistorico(ctk.CTkFrame):
         messagebox.showinfo("Detalhes de Consumo", msg, parent=self.winfo_toplevel())
 
     def _show_detalhes(self, hid):
-        """Abre um modal de leitura com os dados textuais longos da impressão."""
         with db.get_connection() as conn:
             h = conn.execute(
                 "SELECT nome_peca, data_impressao, tempo_impressao, status, "
@@ -718,6 +725,7 @@ class TabHistorico(ctk.CTkFrame):
             ).fetchone()
         if not h:
             return
+            
         win = ctk.CTkToplevel(self.winfo_toplevel())
         win.title("Detalhes da Impressão")
         win.configure(fg_color="#141420")
@@ -725,7 +733,6 @@ class TabHistorico(ctk.CTkFrame):
         win.attributes("-topmost", True)
         win.grab_set()
 
-        # Dimensiona relativo ao monitor principal
         sw = win.winfo_screenwidth()
         sh = win.winfo_screenheight()
         w = min(620, int(sw * 0.35))
@@ -734,13 +741,19 @@ class TabHistorico(ctk.CTkFrame):
 
         win.rowconfigure(0, weight=1)
         win.columnconfigure(0, weight=1)
+        
+        try:
+            p_val = float(str(h[4]).replace(',','.'))
+            p_str = f"R$ {p_val:.2f}"
+        except:
+            p_str = "—"
 
         campos = [
             ("Peça / Modelo",    h[0] or "—"),
             ("Data",             h[1] or "—"),
             ("Tempo",            h[2] or "—"),
             ("Status",           h[3] or "—"),
-            ("Preço Venda",      f"R$ {h[4]:.2f}" if h[4] is not None else "—"),
+            ("Preço Venda",      p_str),
             ("Observação",       h[5] or "—"),
             ("Conf. Fatiador",   h[6] or "—"),
             ("Arquivo 3D",       h[7] or "—"),

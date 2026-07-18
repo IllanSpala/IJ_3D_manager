@@ -1,3 +1,4 @@
+import sqlite3
 import datetime
 import re
 import customtkinter as ctk
@@ -43,6 +44,12 @@ def _migrate_old_pedidos():
 
 
 class EditarPedidoModal(ctk.CTkToplevel):
+    def iconbitmap(self, bitmap=None, default=None):
+        try:
+            super().iconbitmap(bitmap, default)
+        except Exception:
+            pass
+
     def __init__(self, master, p_id, data):
         super().__init__(master)
         self.title(f"Editar Pedido #{p_id}")
@@ -56,7 +63,6 @@ class EditarPedidoModal(ctk.CTkToplevel):
         self.pecas_novas = []
         self.pecas_removidas_ids = []
 
-        # Variáveis de controle dos campos cadastrais
         self.nome_var = ctk.StringVar(value=data.get('nome_cliente', ''))
         self.data_var = ctk.StringVar(value=data.get('data_entrega', ''))
         val_cobrado = float(data.get('valor_cobrado', 0.0))
@@ -64,9 +70,17 @@ class EditarPedidoModal(ctk.CTkToplevel):
         self.status_var = ctk.StringVar(value=data.get('status', 'A Fazer'))
         self.plat_var = ctk.StringVar(value=data.get('plataforma_venda', 'Direto'))
 
-        # Estrutura principal com Scroll para conter todos os elementos de forma fluida
+        # Botões de ação do Modal (Fixos na parte inferior, pacotados primeiro para não sumirem)
+        btn_frame = ctk.CTkFrame(self, fg_color="#1c1c1c", height=60, corner_radius=0)
+        btn_frame.pack(side="bottom", fill="x")
+        btn_frame.pack_propagate(False)
+
+        ctk.CTkButton(btn_frame, text="Cancelar", height=35, fg_color="transparent", border_width=1, border_color="#444", hover_color="#333", command=self.destroy).pack(side="left", padx=20, pady=12)
+        ctk.CTkButton(btn_frame, text="Salvar Alterações", height=35, font=ctk.CTkFont(weight="bold"), fg_color=ACCENT_COLOR, hover_color="#007acc", command=self._save).pack(side="right", padx=20, pady=12)
+
+        # Estrutura principal de Scroll empacotada por cima dos botões
         self.scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        self.scroll.pack(fill="both", expand=True, padx=10, pady=10)
+        self.scroll.pack(side="top", fill="both", expand=True, padx=10, pady=10)
 
         # ─── Seção 1: Dados Cadastrais do Pedido ───
         f_dados = ctk.CTkFrame(self.scroll, fg_color="#1f1f1f", corner_radius=6, border_width=1, border_color="#333")
@@ -77,7 +91,7 @@ class EditarPedidoModal(ctk.CTkToplevel):
             f.pack(fill="x", padx=15, pady=6)
             ctk.CTkLabel(f, text=label, text_color="gray", font=ctk.CTkFont(size=12)).pack(anchor="w")
             if is_option:
-                ctk.CTkOptionMenu(f, variable=var, values=options, fg_color="#111", button_color="#333", height=32).pack(fill="x")
+                ctk.CTkComboBox(f, variable=var, values=options, fg_color="#111", button_color="#333", height=32).pack(fill="x")
             else:
                 ctk.CTkEntry(f, textvariable=var, height=32, fg_color="#111", border_color="#444").pack(fill="x")
 
@@ -93,7 +107,6 @@ class EditarPedidoModal(ctk.CTkToplevel):
         self.f_itens = ctk.CTkFrame(self.scroll, fg_color="#141414", corner_radius=6, border_width=1, border_color="#2a2a2a")
         self.f_itens.pack(fill="x", padx=10, pady=5)
 
-        # Componentes de adição de peças (replicando funcionalidade da TabPedidos)
         f_add = ctk.CTkFrame(self.scroll, fg_color="transparent")
         f_add.pack(fill="x", padx=10, pady=10)
         
@@ -108,21 +121,14 @@ class EditarPedidoModal(ctk.CTkToplevel):
         ctk.CTkButton(f_add, text="+ Acervo", height=35, width=85, fg_color="#333", hover_color="#444", command=self._add_peca_acervo).pack(side="left", padx=2)
         ctk.CTkButton(f_add, text="+ Avulsa", height=35, width=85, fg_color="#2b7a4b", hover_color="#1d5c36", font=ctk.CTkFont(weight="bold"), command=self._open_avulsa_modal).pack(side="left", padx=2)
 
-        # Carrega itens existentes no banco de dados
         self._carregar_itens_banco()
-
-        # Botões de ação do Modal (Fixo na parte inferior da janela)
-        btn_frame = ctk.CTkFrame(self, fg_color="#1c1c1c", height=60, corner_radius=0)
-        btn_frame.pack(side="bottom", fill="x")
-        btn_frame.pack_propagate(False)
-
-        ctk.CTkButton(btn_frame, text="Cancelar", height=35, fg_color="transparent", border_width=1, border_color="#444", hover_color="#333", command=self.destroy).pack(side="left", padx=20, pady=12)
-        ctk.CTkButton(btn_frame, text="Salvar Alterações", height=35, font=ctk.CTkFont(weight="bold"), fg_color=ACCENT_COLOR, hover_color="#007acc", command=self._save).pack(side="right", padx=20, pady=12)
 
     def _carregar_itens_banco(self):
         from core.database import db
         with db.get_connection() as conn:
-            # Busca itens vinculados ao acervo
+            # Correção do erro de TYPE/TUPLE usando a formatação de linha apropriada
+            conn.row_factory = sqlite3.Row
+            
             pecas_acervo = conn.execute(
                 """SELECT pi.id, a.nome_peca, 'acervo' as tipo
                    FROM pedidos_itens pi
@@ -130,7 +136,6 @@ class EditarPedidoModal(ctk.CTkToplevel):
                    WHERE pi.pedido_id=? AND (pi.tipo='acervo' OR pi.tipo IS NULL)""", (self.p_id,)
             ).fetchall()
             
-            # Busca itens cadastrados de forma avulsa
             pecas_avulsas = conn.execute(
                 """SELECT id, COALESCE(nome_avulso, nome_custom, 'Peça Avulsa') as nome_peca, 'avulso' as tipo, custo_est
                    FROM pedidos_itens
@@ -150,7 +155,6 @@ class EditarPedidoModal(ctk.CTkToplevel):
         prefix = "• " if tipo == "acervo" else "🔧 Avulsa: "
         ctk.CTkLabel(row, text=f"{prefix}{nome}", font=ctk.CTkFont(size=12), text_color="#eee").pack(side="left", padx=10)
 
-        # Botão de remoção (atua de forma lógica dependendo da origem do dado)
         if do_banco:
             cmd = lambda: self._remover_item_banco(item_id, row, custo)
         else:
@@ -171,7 +175,7 @@ class EditarPedidoModal(ctk.CTkToplevel):
                 if pi and pi > 0:
                     custo_peca += (pg + pd) * (pr / pi)
 
-        idx = len(self.pecas_novas) + 100000 # Offset para IDs temporários locais
+        idx = len(self.pecas_novas) + 100000 
         item_ref = {"tipo": "acervo", "id_local": idx, "acervo_id": acervo_id, "custo": custo_peca}
         self.pecas_novas.append(item_ref)
         
@@ -223,18 +227,15 @@ class EditarPedidoModal(ctk.CTkToplevel):
         with db.get_connection() as conn:
             c = conn.cursor()
             
-            # 1. Atualiza dados escalares do pedido
             c.execute("""UPDATE pedidos_v2 
                          SET nome_cliente=?, data_entrega=?, valor_cobrado=?, status=?, plataforma_venda=? 
                          WHERE id=?""",
                       (self.nome_var.get(), self.data_var.get(), v_formatado, self.status_var.get(), self.plat_var.get(), self.p_id))
             
-            # 2. Processa remoções solicitadas do banco
             for rem_id in self.pecas_removidas_ids:
                 c.execute("DELETE FROM pedido_filamentos_avulsos WHERE item_idx=?", (rem_id,))
                 c.execute("DELETE FROM pedidos_itens WHERE id=?", (rem_id,))
                 
-            # 3. Processa inserções de novos itens acoplados
             for item in self.pecas_novas:
                 if item["tipo"] == "acervo":
                     c.execute("INSERT INTO pedidos_itens (pedido_id, acervo_id, tipo) VALUES (?,?,?)", 
@@ -281,14 +282,15 @@ class PedidoCard(ModernCard):
         self.cliente_entry.pack(side="left")
 
         plat = data.get('plataforma_venda', 'Direto')
-        if plat and plat != "Direto":
-            self.plat_lbl = ctk.CTkLabel(title_frame, text=f" {plat.upper()} ", text_color="#aaa", fg_color="#222", corner_radius=4, font=ctk.CTkFont(size=9, weight="bold"))
-            self.plat_lbl.pack(side="left", padx=(6, 0))
+        self.plat_var = ctk.StringVar(value=plat)
+        self.plat_combo = ctk.CTkComboBox(title_frame, variable=self.plat_var, values=["Shopee", "MercadoLivre", "OLX", "Direto"],
+                                          width=110, height=22, fg_color="#222", border_width=0, font=ctk.CTkFont(size=10, weight="bold"),
+                                          dropdown_font=ctk.CTkFont(size=11), command=self._make_saver('plataforma_venda'))
+        self.plat_combo.pack(side="left", padx=(6, 0))
 
         actions = ctk.CTkFrame(header, fg_color="transparent")
         actions.pack(side="right")
         
-        # Botão para abrir o novo gerenciador dinâmico de edição
         ctk.CTkButton(actions, text="✏", width=22, height=22, corner_radius=4, 
                       fg_color="transparent", text_color="#aaa", hover_color="#333", font=ctk.CTkFont(size=12),
                       command=self._open_edit_modal).pack(side="left", padx=2)
@@ -394,6 +396,8 @@ class PedidoCard(ModernCard):
         self.valor_entry.delete(0, 'end')
         val_formatado = f"{float(data.get('valor_cobrado', 0.0)):.2f}"
         self.valor_entry.insert(0, val_formatado)
+        
+        self.plat_var.set(data.get('plataforma_venda', 'Direto'))
 
         self.status = data.get('status', 'A Fazer')
         b_color, f_color = self._get_priority_colors(data.get('data_entrega'), self.status)
@@ -440,7 +444,7 @@ class TabPedidos(ctk.CTkFrame):
         fc_plat = ctk.CTkFrame(f1, fg_color="transparent")
         fc_plat.grid(row=0, column=3, padx=8, sticky="ew")
         ctk.CTkLabel(fc_plat, text="Plataforma", text_color="gray", font=ctk.CTkFont(size=12)).pack(anchor="w")
-        ctk.CTkOptionMenu(fc_plat, variable=self.plataforma_var, values=["Shopee", "MercadoLivre", "OLX", "Direto"], height=35, fg_color="#111", button_color="#333").pack(fill="x", expand=True)
+        ctk.CTkComboBox(fc_plat, variable=self.plataforma_var, values=["Shopee", "MercadoLivre", "OLX", "Direto"], height=35, fg_color="#111", button_color="#333").pack(fill="x", expand=True)
 
         f2 = ctk.CTkFrame(self.form_card, fg_color="transparent")
         f2.pack(fill="x", padx=15, pady=10)
@@ -454,8 +458,16 @@ class TabPedidos(ctk.CTkFrame):
         ctk.CTkButton(f2, text="+ Avulsa", height=35, width=90, fg_color="#2b7a4b", hover_color="#1d5c36", font=ctk.CTkFont(weight="bold"), command=self._open_avulsa_modal).pack(side="left", padx=5)
 
         self.pecas_selecionadas = []
-        self.pecas_ui_frame = ctk.CTkFrame(self.form_card, fg_color="transparent")
-        self.pecas_ui_frame.pack(fill="x", padx=20, pady=(0, 10))
+        
+        # Limita a altura das peças adicionadas para que não empurre o botão de salvar para baixo da tela!
+        self.pecas_ui_frame = ctk.CTkScrollableFrame(self.form_card, fg_color="transparent", height=100)
+        self.pecas_ui_frame.pack(fill="x", padx=20, pady=(0, 5))
+
+        f_desc = ctk.CTkFrame(self.form_card, fg_color="transparent")
+        f_desc.pack(fill="x", padx=20, pady=(5, 10))
+        ctk.CTkLabel(f_desc, text="Pedido Conceitual (Opcional - preencha caso não queira adicionar peças físicas acima):", text_color="gray", font=ctk.CTkFont(size=12)).pack(anchor="w")
+        self.desc_var = ctk.StringVar()
+        ctk.CTkEntry(f_desc, textvariable=self.desc_var, height=35, fg_color="#111", border_color="#444", placeholder_text="Descreva o pedido aqui...").pack(fill="x", expand=True)
 
         submit_frame = ctk.CTkFrame(self.form_card, fg_color="transparent")
         submit_frame.pack(fill="x", padx=20, pady=(0, 15))
@@ -516,7 +528,7 @@ class TabPedidos(ctk.CTkFrame):
         acervo_id = self.acervo_dict[p]
         
         row_ui = ctk.CTkFrame(self.pecas_ui_frame, fg_color="#222", corner_radius=6, border_width=1, border_color="#333")
-        row_ui.pack(side="left", padx=5, pady=5)
+        row_ui.pack(fill="x", padx=5, pady=2)
         ctk.CTkLabel(row_ui, text=p, font=ctk.CTkFont(size=12)).pack(side="left", padx=10, pady=6)
         
         custo_peca = 0.0
@@ -536,7 +548,7 @@ class TabPedidos(ctk.CTkFrame):
 
     def _add_avulsa_ui(self, nome, tempo, custo_total, filamentos):
         row_ui = ctk.CTkFrame(self.pecas_ui_frame, fg_color="#1a2e3a", corner_radius=6, border_width=1, border_color="#2a4a5e")
-        row_ui.pack(side="left", padx=5, pady=5)
+        row_ui.pack(fill="x", padx=5, pady=2)
         ctk.CTkLabel(row_ui, text=f"Avulsa: {nome}", font=ctk.CTkFont(size=12)).pack(side="left", padx=10, pady=6)
         
         idx = len(self.pecas_selecionadas)
@@ -567,8 +579,12 @@ class TabPedidos(ctk.CTkFrame):
         self.valor_var.set(f"{max(0.0, v - custo):.2f}")
 
     def _criar_pedido(self):
-        if not self.cliente_var.get() or not self.pecas_selecionadas:
-            return messagebox.showerror("Erro", "Preencha o nome do cliente e adicione pelo menos uma peça.")
+        desc = self.desc_var.get().strip()
+        if not self.cliente_var.get():
+            return messagebox.showerror("Erro", "Preencha o nome do cliente.")
+        if not self.pecas_selecionadas and not desc:
+            return messagebox.showerror("Erro", "Adicione pelo menos uma peça acima ou preencha a descrição do pedido conceitual.")
+            
         try: v = float(self.valor_var.get().replace(",", ".")) if self.valor_var.get() else 0.0
         except ValueError: v = 0.0
         
@@ -578,6 +594,11 @@ class TabPedidos(ctk.CTkFrame):
             c.execute("INSERT INTO pedidos_v2 (nome_cliente, data_entrega, valor_cobrado, status, plataforma_venda) VALUES (?,?,?,?,?)",
                       (self.cliente_var.get(), self.data_var.get(), v, "A Fazer", self.plataforma_var.get()))
             pid = c.lastrowid
+            
+            if not self.pecas_selecionadas and desc:
+                c.execute("INSERT INTO pedidos_itens (pedido_id, tipo, nome_avulso, custo_est, nota) VALUES (?,?,?,?,?)",
+                          (pid, "avulso", desc, 0.0, ""))
+
             for item in self.pecas_selecionadas:
                 if item.get("tipo") == "avulso":
                     c.execute("INSERT INTO pedidos_itens (pedido_id, tipo, nome_avulso, custo_est, nota) VALUES (?,?,?,?,?)",
@@ -592,7 +613,7 @@ class TabPedidos(ctk.CTkFrame):
             conn.commit()
             
         self.pecas_selecionadas = []
-        self.cliente_var.set(""); self.valor_var.set(""); self.data_var.set("")
+        self.cliente_var.set(""); self.valor_var.set(""); self.data_var.set(""); self.desc_var.set("")
         self._toggle_form()
         app_state.load_pedidos()
 
@@ -628,6 +649,12 @@ class TabPedidos(ctk.CTkFrame):
 
 
 class AdicionarAvulsoModal(ctk.CTkToplevel):
+    def iconbitmap(self, bitmap=None, default=None):
+        try:
+            super().iconbitmap(bitmap, default)
+        except Exception:
+            pass
+
     def __init__(self, master, on_add_callback):
         super().__init__(master)
         self.title("Adicionar Peça Avulsa")
@@ -640,11 +667,16 @@ class AdicionarAvulsoModal(ctk.CTkToplevel):
         self.filamentos = app_state.get_filamentos_ativos()
         self.fil_rows = []
         
-        self.grid_rowconfigure(1, weight=1) 
-        self.grid_columnconfigure(0, weight=1)
+        # Botões pacotados primeiro em fixo na base para nunca sumirem do campo de visão!
+        btn_frame = ctk.CTkFrame(self, fg_color="#1c1c1c", height=60, corner_radius=0)
+        btn_frame.pack(side="bottom", fill="x")
+        btn_frame.pack_propagate(False)
+        
+        ctk.CTkButton(btn_frame, text="Cancelar", height=35, fg_color="transparent", border_width=1, border_color="#444", hover_color="#333", command=self.destroy).pack(side="left", padx=20, pady=12)
+        ctk.CTkButton(btn_frame, text="Salvar Peça", height=35, font=ctk.CTkFont(weight="bold"), fg_color=ACCENT_COLOR, hover_color="#007acc", command=self._save).pack(side="right", padx=20, pady=12)
         
         f_top = ctk.CTkFrame(self, fg_color="transparent")
-        f_top.grid(row=0, column=0, sticky="ew", padx=20, pady=(20, 5))
+        f_top.pack(side="top", fill="x", padx=20, pady=(20, 5))
         
         ctk.CTkLabel(f_top, text="Nome da Peça Avulsa:", font=ctk.CTkFont(weight="bold")).pack(anchor="w")
         self.nome_var = ctk.StringVar()
@@ -657,15 +689,9 @@ class AdicionarAvulsoModal(ctk.CTkToplevel):
         ctk.CTkLabel(f_top, text="Filamentos (Modelo + Purga):", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(10, 0))
         
         self.scroll = ctk.CTkScrollableFrame(self, fg_color="#111", corner_radius=6, border_width=1, border_color="#222")
-        self.scroll.grid(row=1, column=0, sticky="nsew", padx=20, pady=(5, 10))
+        self.scroll.pack(side="top", fill="both", expand=True, padx=20, pady=(5, 10))
         
         ctk.CTkButton(self.scroll, text="+ Adicionar Filamento", fg_color="#2a2a2a", hover_color="#444", command=self._add_fil_row).pack(anchor="w", pady=(5, 10), padx=5)
-        
-        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
-        btn_frame.grid(row=2, column=0, sticky="ew", padx=20, pady=20)
-        
-        ctk.CTkButton(btn_frame, text="Cancelar", height=35, fg_color="transparent", border_width=1, border_color="#444", hover_color="#333", command=self.destroy).pack(side="left")
-        ctk.CTkButton(btn_frame, text="Salvar Peça", height=35, font=ctk.CTkFont(weight="bold"), fg_color=ACCENT_COLOR, hover_color="#007acc", command=self._save).pack(side="right")
         
     def _add_fil_row(self):
         row = ctk.CTkFrame(self.scroll, fg_color="#1e1e1e", corner_radius=6, border_width=1, border_color="#333")
@@ -673,7 +699,7 @@ class AdicionarAvulsoModal(ctk.CTkToplevel):
         
         fil_var = ctk.StringVar()
         opts = [f"{f['marca']} {f['material']} {f['cor']}" for f in self.filamentos]
-        opt = ctk.CTkOptionMenu(row, variable=fil_var, values=opts if opts else ["Sem Filamentos"], width=180, fg_color="#111", button_color="#333")
+        opt = ctk.CTkComboBox(row, variable=fil_var, values=opts if opts else ["Sem Filamentos"], width=180, fg_color="#111", button_color="#333")
         opt.pack(side="left", padx=8, pady=8)
         
         mod_var = ctk.StringVar(value="0")
