@@ -15,7 +15,6 @@ from tabs.acervo import TabAcervo
 from tabs.almoxarifado import TabAlmoxarifado
 from tabs.pedidos import TabPedidos
 from tabs.financeiro import TabFinanceiro
-from tabs.kits import TabKits
 from tabs.historico import TabHistorico
 
 ctk.set_appearance_mode("dark")
@@ -86,7 +85,6 @@ class App(ctk.CTk):
             (1,  "⚙",  lambda: self._swap(TabFilamentos)),
             (2,  "📦", lambda: self._swap(TabAlmoxarifado)),
             (3,  "📚", lambda: self._swap(TabAcervo)),
-            (4,  "🎺", lambda: self._swap(TabKits)),
             (5,  "📝", lambda: self._swap(TabPedidos)),
             (6,  "🗂", lambda: self._swap(TabHistorico)),
             (7,  "💰", lambda: self._swap(TabFinanceiro)),

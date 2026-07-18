@@ -287,10 +287,10 @@ class _AnalyticalResultsPanel(ctk.CTkFrame):
         super().__init__(parent, fg_color="#181818", corner_radius=15, **kw)
         self._rows: list[ctk.CTkFrame] = []
 
-        ctk.CTkLabel(self, text="Extrato Analítico de Custo",
-                     font=ctk.CTkFont(size=18, weight="bold")).pack(pady=(24, 4))
-        ctk.CTkLabel(self, text="Fórmula: (Σ Materiais + Operação + Embalagem) × (1 + Lucro%) ÷ (1 − Taxa%)",
-                     font=ctk.CTkFont(size=11), text_color="gray",
+        ctk.CTkLabel(self, text="📊 Extrato Analítico de Custos",
+                     font=ctk.CTkFont(size=20, weight="bold"), text_color="#a6e3a1").pack(pady=(20, 2))
+        ctk.CTkLabel(self, text="Fórmula: (Σ Mat. + Op. + Emb.) × (1 + Lucro%) ÷ (1 − Taxa%)",
+                     font=ctk.CTkFont(size=11), text_color="#6c7086",
                      wraplength=420).pack(pady=(0, 16))
 
         self._table_scroll = _BidirScrollFrame(self, height=320, canvas_bg="#181818")
@@ -490,14 +490,16 @@ class TabFinanceiro(ctk.CTkFrame):
         self._ensure_config_cols()
         cfg = self._load_config()
 
-        main = ModernCard(self)
-        main.grid(row=0, column=0, padx=40, pady=40, sticky="nsew")
-        main.grid_columnconfigure((0, 1), weight=1)
+        main = ctk.CTkFrame(self, fg_color="transparent")
+        main.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
+        main.grid_columnconfigure(0, weight=4)
+        main.grid_columnconfigure(1, weight=5)
         main.grid_rowconfigure(1, weight=1)
 
-        ctk.CTkLabel(main, text="Simulador Financeiro — Extrato Analítico",
-                     font=ctk.CTkFont(size=24, weight="bold")).grid(
-            row=0, column=0, columnspan=2, pady=30)
+        header = ctk.CTkFrame(main, fg_color="#181825", corner_radius=12)
+        header.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 15))
+        ctk.CTkLabel(header, text="Simulador Financeiro Inteligente",
+                     font=ctk.CTkFont(size=24, weight="bold"), text_color="#cdd6f4").pack(pady=15)
 
         # ── Left panel: inputs ────────────────────────────────────────────
         self._modo_teste = False
@@ -552,118 +554,73 @@ class TabFinanceiro(ctk.CTkFrame):
         self._teste_panel.grid(row=1, column=0, sticky="ew", pady=8)
         self._teste_panel.grid_remove()
 
-        # Editable rows
+        # ── Group 1: Configurações Globais (Custos fixos) ──
+        grp_glob = ctk.CTkFrame(f_in, fg_color="#1e1e2e", corner_radius=12)
+        grp_glob.grid(row=2, column=0, sticky="ew", pady=(0, 15))
+        ctk.CTkLabel(grp_glob, text="⚙️ Parâmetros Globais", font=ctk.CTkFont(size=14, weight="bold"), text_color="#89b4fa").pack(anchor="w", padx=15, pady=(10,5))
+        
         self.energia_var    = ctk.StringVar(value=cfg.get("calc_custo_hora", "1.50"))
-        self.horas_int_var  = ctk.StringVar(value="1")
-        self.min_var        = ctk.StringVar(value="0")
         self.lucro_var      = ctk.StringVar(value=cfg.get("calc_lucro_pct", "100"))
         self.embalagem_var = ctk.StringVar(value=cfg.get("calc_embalagem", "0.00"))
 
         rows_def = [
-            (1, "Custo de Operação / Hora (R$):", self.energia_var, "calc_custo_hora",
-             "Inclui energia elétrica, desgaste de peças,\n"
-             "custo do bico, das correntes, etc.\n\n"
-             "Dica: some a conta de luz mensal + manutenção\n"
-             "e divida pelas horas que a impressora roda."),
-
-            (3, "Margem de Lucro (%):", self.lucro_var, "calc_lucro_pct",
-             "Percentual de lucro que você deseja obter\n"
-             "sobre o custo total (material + operação + embalagem).\n\n"
-             "100% = você dobra o custo → 50% de margem bruta."),
-
-            (4, "Custo de Embalagem (R$):", self.embalagem_var, "calc_embalagem",
-             "Custo fixo de embalagem por envio:\n"
-             "caixas, plástico bolha, fita, etiqueta, etc.\n"
-             "Salve o valor padrão e ajuste quando necessário."),
+            ("Custo Operação/h (R$):", self.energia_var, "calc_custo_hora", "Luz + Manutenção por hora"),
+            ("Margem Lucro (%):", self.lucro_var, "calc_lucro_pct", "100% = Preço 2x o Custo"),
+            ("Custo Embalagem (R$):", self.embalagem_var, "calc_embalagem", "Fixo por envio"),
         ]
 
-        for r, label, var, key, tip in rows_def:
-            grid_r = r + 1  # shift down 1 to make room for toggle btn at row=0
-            row_w = _EditableRow(f_in, label, tip, var, key)
-            row_w.grid(row=grid_r, column=0, sticky="ew", pady=6)
+        for label, var, key, tip in rows_def:
+            row_w = _EditableRow(grp_glob, label, tip, var, key)
+            row_w.pack(fill="x", padx=10, pady=5)
 
-        # ── Tempo de Impressão: horas (int) + minutos (int) ──────────────
-        horas_row = ctk.CTkFrame(f_in, fg_color="transparent")
-        horas_row.grid(row=3, column=0, sticky="ew", pady=6)
+        # ── Group 2: Configuração da Impressão ──
+        grp_imp = ctk.CTkFrame(f_in, fg_color="#1e1e2e", corner_radius=12)
+        grp_imp.grid(row=3, column=0, sticky="ew", pady=(0, 15))
+        ctk.CTkLabel(grp_imp, text="🕒 Detalhes da Impressão", font=ctk.CTkFont(size=14, weight="bold"), text_color="#f9e2af").pack(anchor="w", padx=15, pady=(10,5))
+        
+        self.horas_int_var  = ctk.StringVar(value="1")
+        self.min_var        = ctk.StringVar(value="0")
+        horas_row = ctk.CTkFrame(grp_imp, fg_color="transparent")
+        horas_row.pack(fill="x", padx=10, pady=5)
         horas_row.grid_columnconfigure(1, weight=1)
         lbl_hf = ctk.CTkFrame(horas_row, fg_color="transparent")
         lbl_hf.grid(row=0, column=0, sticky="e", padx=(0, 8))
-        ctk.CTkLabel(lbl_hf, text="Tempo de Impressão:", anchor="e").pack(side="left")
-        _make_info_btn(lbl_hf,
-            "Informe a duração em horas e minutos inteiros.\n"
-            "Ex: 6 h + 50 min (≠ 6.5 h).\n"
-            "Não precisa salvar — varia por peça."
-        ).pack(side="left", padx=(4, 0))
+        ctk.CTkLabel(lbl_hf, text="Tempo Impressão:", anchor="e").pack(side="left")
         hm_inner = ctk.CTkFrame(horas_row, fg_color="transparent")
         hm_inner.grid(row=0, column=1, sticky="w", padx=4)
         ctk.CTkEntry(hm_inner, textvariable=self.horas_int_var,
-                     width=64, placeholder_text="h").pack(side="left")
+                     width=64, placeholder_text="h", fg_color="#181825", border_color="#313244").pack(side="left")
         ctk.CTkLabel(hm_inner, text="h", text_color="#888", width=18).pack(side="left")
         ctk.CTkEntry(hm_inner, textvariable=self.min_var,
-                     width=64, placeholder_text="min").pack(side="left", padx=(8, 0))
-        ctk.CTkLabel(hm_inner, text="min", text_color="#888").pack(side="left", padx=(4, 0))
+                     width=64, placeholder_text="min", fg_color="#181825", border_color="#313244").pack(side="left", padx=(8, 0))
+        ctk.CTkLabel(hm_inner, text="m", text_color="#888").pack(side="left", padx=(4, 0))
 
-        # ── Quantidade de Cópias (múltiplos itens na mesma impressão) ─────────
-        qtd_row = ctk.CTkFrame(f_in, fg_color="transparent")
-        qtd_row.grid(row=7, column=0, sticky="ew", pady=6)
+        # ── Group 3: Vendas e Mercado ──
+        grp_venda = ctk.CTkFrame(f_in, fg_color="#1e1e2e", corner_radius=12)
+        grp_venda.grid(row=4, column=0, sticky="ew", pady=(0, 15))
+        ctk.CTkLabel(grp_venda, text="🛒 Mercado & Envio", font=ctk.CTkFont(size=14, weight="bold"), text_color="#f38ba8").pack(anchor="w", padx=15, pady=(10,5))
+
+        qtd_row = ctk.CTkFrame(grp_venda, fg_color="transparent")
+        qtd_row.pack(fill="x", padx=10, pady=5)
         qtd_row.grid_columnconfigure(1, weight=1)
-        lbl_qf = ctk.CTkFrame(qtd_row, fg_color="transparent")
-        lbl_qf.grid(row=0, column=0, sticky="e", padx=(0, 8))
-        ctk.CTkLabel(lbl_qf, text="Quantidade de Cópias:", anchor="e").pack(side="left")
-        _make_info_btn(lbl_qf,
-            "Quantas peças idênticas foram impressas "
-            "na mesma mesa / sessão?\n\n"
-            "Ex: 6 chaveiros → informe 6.\n"
-            "O custo individual será calculado dividindo "
-            "o custo total por este valor.\n"
-            "O Extrato mostrará tanto o custo unitário \n"
-            "quanto o preço de venda por peça."
-        ).pack(side="left", padx=(4, 0))
+        ctk.CTkLabel(qtd_row, text="Qtd de Cópias:", anchor="e").grid(row=0, column=0, sticky="e", padx=(0, 8))
         self.qtd_var = ctk.StringVar(value="1")
-        ctk.CTkEntry(qtd_row, textvariable=self.qtd_var,
-                     width=80, height=32, placeholder_text="1",
-                     font=ctk.CTkFont(size=13)).grid(
-            row=0, column=1, sticky="w", padx=4)
+        ctk.CTkEntry(qtd_row, textvariable=self.qtd_var, width=80, height=32, fg_color="#181825", border_color="#313244").grid(row=0, column=1, sticky="w", padx=4)
 
-        # Platform selector
-        plat_row = ctk.CTkFrame(f_in, fg_color="transparent")
-        plat_row.grid(row=8, column=0, sticky="ew", pady=6)
+        plat_row = ctk.CTkFrame(grp_venda, fg_color="transparent")
+        plat_row.pack(fill="x", padx=10, pady=5)
         plat_row.grid_columnconfigure(1, weight=1)
-        lbl_pf = ctk.CTkFrame(plat_row, fg_color="transparent")
-        lbl_pf.grid(row=0, column=0, sticky="e", padx=(0, 8))
-        ctk.CTkLabel(lbl_pf, text="Modo de Envio / Plataforma:", anchor="e").pack(side="left")
-        _make_info_btn(lbl_pf,
-            "Taxa cobrada pela plataforma de venda:\n"
-            "• Shopee: 18%\n"
-            "• Mercado Livre: 15%\n"
-            "• OLX: 10%\n"
-            "• Direto (WhatsApp / local): 0%\n\n"
-            "O preço final já é ajustado para que\n"
-            "você receba a margem desejada após a taxa."
-        ).pack(side="left", padx=(4, 0))
+        ctk.CTkLabel(plat_row, text="Plataforma de Venda:", anchor="e").grid(row=0, column=0, sticky="e", padx=(0, 8))
         self.plataforma_var = ctk.StringVar(value="Direto")
         ctk.CTkOptionMenu(plat_row, variable=self.plataforma_var,
-                          values=list(self.TAXAS_PLATAFORMA.keys())).grid(
-            row=0, column=1, sticky="ew", padx=4)
+                          values=list(self.TAXAS_PLATAFORMA.keys()), fg_color="#181825").grid(row=0, column=1, sticky="ew", padx=4)
 
-        # ── Engenharia Reversa: Preço Estimado de Venda ───────────────────
-        rev_row = ctk.CTkFrame(f_in, fg_color="transparent")
-        rev_row.grid(row=9, column=0, sticky="ew", pady=6)
+        rev_row = ctk.CTkFrame(grp_venda, fg_color="transparent")
+        rev_row.pack(fill="x", padx=10, pady=(5,15))
         rev_row.grid_columnconfigure(1, weight=1)
-        lbl_rv = ctk.CTkFrame(rev_row, fg_color="transparent")
-        lbl_rv.grid(row=0, column=0, sticky="e", padx=(0, 8))
-        ctk.CTkLabel(lbl_rv, text="Preço Estimado de Venda (R$):", anchor="e").pack(side="left")
-        _make_info_btn(lbl_rv,
-            "Opcional: informe o preço que você pretende cobrar.\n"
-            "A calculadora mostrará qual Margem de Lucro Real\n"
-            "você obtém com esse valor, já descontando\n"
-            "a taxa da plataforma e todos os custos."
-        ).pack(side="left", padx=(4, 0))
+        ctk.CTkLabel(rev_row, text="Preço Alvo (Opcional):", anchor="e").grid(row=0, column=0, sticky="e", padx=(0, 8))
         self.preco_estimado_var = ctk.StringVar(value="")
-        ctk.CTkEntry(rev_row, textvariable=self.preco_estimado_var,
-                     width=120, height=32, placeholder_text="ex: 45.00",
-                     font=ctk.CTkFont(size=13)).grid(
-            row=0, column=1, sticky="w", padx=4)
+        ctk.CTkEntry(rev_row, textvariable=self.preco_estimado_var, width=120, height=32, placeholder_text="R$ 0,00", fg_color="#181825", border_color="#313244").grid(row=0, column=1, sticky="w", padx=4)
 
         ctk.CTkButton(f_in, text="Calcular Extrato",
                        font=ctk.CTkFont(weight="bold", size=16),

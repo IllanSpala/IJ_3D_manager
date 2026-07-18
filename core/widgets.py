@@ -88,22 +88,22 @@ class HorizontalInventoryCard(ModernCard):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        self.img_frame = ctk.CTkFrame(self, fg_color="transparent", width=120, height=120)
-        self.img_frame.grid(row=0, column=0, padx=15, pady=15, sticky="nsew")
+        self.img_frame = ctk.CTkFrame(self, fg_color="transparent", width=60, height=60)
+        self.img_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
         self.img_frame.grid_propagate(False)
         
-        self.img_label = ctk.CTkLabel(self.img_frame, text="S/ Img", fg_color="#222", corner_radius=5)
+        self.img_label = ctk.CTkLabel(self.img_frame, text="S/Img", fg_color="#222", corner_radius=4, font=ctk.CTkFont(size=10))
         self.img_label.place(relwidth=1, relheight=1)
         
         self.content_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.content_frame.grid(row=0, column=1, padx=(0, 15), pady=15, sticky="nsew")
+        self.content_frame.grid(row=0, column=1, padx=(0, 10), pady=10, sticky="nsew")
 
     def _update_image(self):
         from core.utils import resolve_media_path, load_and_resize_image
         caminho = self.data.get('caminho_foto')
         if caminho:
             full_foto = resolve_media_path(caminho)
-            img_ctk = load_and_resize_image(full_foto, size=(120, 120))
+            img_ctk = load_and_resize_image(full_foto, size=(60, 60))
             if img_ctk:
                 self.img_label.configure(image=img_ctk, text="")
                 self.img_label.image = img_ctk

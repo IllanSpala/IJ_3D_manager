@@ -13,7 +13,7 @@ class _LazyImage:
     Defers image loading until the widget is actually visible on screen.
     Uses `after_idle` so the main loop stays fluid while cards populate.
     """
-    def __init__(self, label: ctk.CTkLabel, caminho: str | None, size=(90, 90)):
+    def __init__(self, label: ctk.CTkLabel, caminho: str | None, size=(60, 60)):
         self._label   = label
         self._caminho = caminho
         self._size    = size
@@ -56,7 +56,7 @@ class AcervoCard(HorizontalInventoryCard):
         # col 1: print count  col 2: −(falha)  col 3: ⚙(detalhes)  col 4: ✕(delete)  col 5: +(impressão)
         self.count_label = ctk.CTkLabel(
             top_bar, text=f"🖨 {data.get('total_impressoes', 0)}",
-            font=ctk.CTkFont(weight="bold", size=13), text_color="#aaa"
+            font=ctk.CTkFont(weight="bold", size=12), text_color="#aaa"
         )
         self.count_label.grid(row=0, column=1, padx=(10, 4))
 
@@ -116,7 +116,7 @@ class AcervoCard(HorizontalInventoryCard):
                 row=meta_row, column=0, sticky="w")
 
         # ── Lazy-load card thumbnail ───────────────────────────────────────
-        _LazyImage(self.img_label, data.get('caminho_foto'), size=(90, 90))
+        _LazyImage(self.img_label, data.get('caminho_foto'), size=(60, 60))
 
     def update_data(self, data):
         self.data = data
@@ -133,7 +133,7 @@ class AcervoCard(HorizontalInventoryCard):
             if custo is not None and custo > 0:
                 info_parts.append(f"💰 R$ {custo:.2f}")
             self.info_label.configure(text="  |  ".join(info_parts) if info_parts else "")
-        _LazyImage(self.img_label, data.get('caminho_foto'), size=(90, 90))
+        _LazyImage(self.img_label, data.get('caminho_foto'), size=(60, 60))
 
     def _make_saver(self, field):
         def saver(val):
@@ -521,39 +521,31 @@ class TabAcervo(ctk.CTkFrame):
         app_state.load_filamentos()
 
     def _on_state_change(self, event=None):
-        if event:
-            action = event.get('action')
-            a_id   = event.get('id')
-            if action == 'update' and a_id in self.cards:
-                self.cards[a_id].update_data(event['data'])
-                return
-            elif action == 'remove' and a_id in self.cards:
-                self.cards[a_id].destroy()
-                del self.cards[a_id]
-                return
+        if event and event.get('action') in ('add', 'update', 'remove'):
+            pass
 
-        # Full rebuild (initial load or structural change)
-        for w in self.cards.values():
-            w.destroy()
-        self.cards = {}
-        self._current_page = 1
-        if getattr(self, '_load_more_frame', None) and self._load_more_frame.winfo_exists():
-            self._load_more_frame.destroy()
-        self._render_page()
-
-    def _render_page(self):
-        if getattr(self, '_load_more_frame', None) and self._load_more_frame.winfo_exists():
-            self._load_more_frame.destroy()
-            
-        start_idx = (self._current_page - 1) * self._page_size
-        end_idx = start_idx + self._page_size
-        page_data = app_state.acervo[start_idx:end_idx]
-
-        for data in page_data:
-            if data['id'] not in self.cards:
+        limit = self._current_page * self._page_size
+        items = app_state.acervo[:limit]
+        
+        loaded_pids = {data['id'] for data in items}
+        
+        for data in items:
+            pid = data['id']
+            if pid in self.cards:
+                self.cards[pid].update_data(data)
+            else:
                 self._add_card(data)
-                
-        if end_idx < len(app_state.acervo):
+
+        # clear extra cards
+        for pid in list(self.cards.keys()):
+            if pid not in loaded_pids:
+                self.cards[pid].destroy()
+                del self.cards[pid]
+
+        if getattr(self, '_load_more_frame', None) and self._load_more_frame.winfo_exists():
+            self._load_more_frame.destroy()
+
+        if len(app_state.acervo) > limit:
             self._load_more_frame = ctk.CTkFrame(self.list_frame, fg_color="transparent")
             self._load_more_frame.pack(fill="x", pady=10)
             ctk.CTkButton(self._load_more_frame, text="Carregar Mais", command=self._load_next_page, fg_color="#2a2a4a", hover_color="#3a3a6a").pack()
