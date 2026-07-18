@@ -108,7 +108,7 @@ class StateManager:
                 ac['materiais'] = [dict(f) for f in fils]
 
                 last_print = conn.execute(
-                    "SELECT data_impressao FROM acervo_impressoes "
+                    "SELECT data_impressao FROM hist_impressoes "
                     "WHERE acervo_id=? ORDER BY id DESC LIMIT 1",
                     (ac['id'],)
                 ).fetchone()
@@ -116,7 +116,7 @@ class StateManager:
                                           if last_print else None)
 
                 count = conn.execute(
-                    "SELECT COUNT(*) FROM acervo_impressoes WHERE acervo_id=?",
+                    "SELECT COUNT(*) FROM hist_impressoes WHERE acervo_id=? AND status != 'Cancelado'",
                     (ac['id'],)
                 ).fetchone()[0]
                 ac['total_impressoes'] = count

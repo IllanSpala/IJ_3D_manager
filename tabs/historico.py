@@ -558,6 +558,14 @@ class TabHistorico(ctk.CTkFrame):
 
         self._data_rows = []
         self._row_start = 2
+        
+        self._current_page = 1
+        self._page_size = 20
+        self._all_data = []
+        
+        # We will keep a reference to the 'Load More' button frame so we can remove it
+        self._load_more_frame = None
+
         self._refresh()
 
 
@@ -612,24 +620,38 @@ class TabHistorico(ctk.CTkFrame):
             return res
 
     def _refresh(self, *_):
+        self._current_page = 1
         for row_widgets in self._data_rows:
             for w in row_widgets:
                 if w and w.winfo_exists(): w.destroy()
         self._data_rows = []
+        if getattr(self, '_load_more_frame', None) and self._load_more_frame.winfo_exists():
+            self._load_more_frame.destroy()
 
-        data = self._load_data()
+        self._all_data = self._load_data()
 
         search = self._search_var.get().strip().lower()
         sf = self._status_filter.get()
         if search:
-            data = [d for d in data if search in d["nome_peca"].lower() or any(search in f['nome'].lower() for f in d['fil_data'])]
+            self._all_data = [d for d in self._all_data if search in d["nome_peca"].lower() or any(search in f['nome'].lower() for f in d['fil_data'])]
         if sf != "Todos":
-            data = [d for d in data if d["status"].lower() == sf.lower()]
+            self._all_data = [d for d in self._all_data if d["status"].lower() == sf.lower()]
 
+        self._render_page()
+
+    def _render_page(self):
         t = self._scroll.inner
-        for ri, d in enumerate(data):
-            gr = self._row_start + ri
-            bg = _ROW_ODD if ri % 2 == 0 else _ROW_EVN
+        
+        if getattr(self, '_load_more_frame', None) and self._load_more_frame.winfo_exists():
+            self._load_more_frame.destroy()
+            
+        start_idx = (self._current_page - 1) * self._page_size
+        end_idx = start_idx + self._page_size
+        page_data = self._all_data[start_idx:end_idx]
+
+        for ri, d in enumerate(page_data):
+            gr = self._row_start + start_idx + ri
+            bg = _ROW_ODD if (start_idx + ri) % 2 == 0 else _ROW_EVN
             row_refs = []
 
             def _cell(col, text, color="#ccc", anchor="w"):
@@ -699,12 +721,20 @@ class TabHistorico(ctk.CTkFrame):
 
             self._data_rows.append(row_refs)
 
-        if not data:
+        if not self._all_data:
             ef = ctk.CTkFrame(t, fg_color="transparent")
             ef.grid(row=self._row_start, column=0, columnspan=len(self._COLS), sticky="ew", pady=40)
             ctk.CTkLabel(ef, text="Nenhum histórico encontrado.",
                          font=ctk.CTkFont(size=14), text_color="#555").pack()
             self._data_rows.append([ef])
+        elif end_idx < len(self._all_data):
+            self._load_more_frame = ctk.CTkFrame(t, fg_color="transparent")
+            self._load_more_frame.grid(row=self._row_start + end_idx, column=0, columnspan=len(self._COLS), pady=15)
+            ctk.CTkButton(self._load_more_frame, text="Carregar Mais", command=self._load_next_page, fg_color="#2a2a4a", hover_color="#3a3a6a").pack()
+
+    def _load_next_page(self):
+        self._current_page += 1
+        self._render_page()
 
     def _show_duvida(self, d):
         tempo = d['tempo'] if d['tempo'] else 'Não informado'

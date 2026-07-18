@@ -145,7 +145,7 @@ class AcervoCard(HorizontalInventoryCard):
         if messagebox.askyesno("Confirmar", "Remover esta peça?"):
             from core.database import db
             with db.get_connection() as conn:
-                conn.execute("DELETE FROM acervo_impressoes WHERE acervo_id=?", (self.a_id,))
+                conn.execute("UPDATE hist_impressoes SET acervo_id = NULL WHERE acervo_id=?", (self.a_id,))
                 conn.execute("DELETE FROM acervo_filamentos WHERE acervo_id=?", (self.a_id,))
                 conn.execute("DELETE FROM acervo WHERE id=?", (self.a_id,))
                 conn.commit()
@@ -174,8 +174,9 @@ class AcervoCard(HorizontalInventoryCard):
         with db.get_connection() as conn:
             c = conn.cursor()
             agora = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            c.execute("INSERT INTO acervo_impressoes (acervo_id, data_impressao) VALUES (?,?)",
-                      (self.a_id, agora))
+            c.execute("INSERT INTO hist_impressoes (acervo_id, nome_peca, data_impressao, tempo_impressao, status, preco_venda, arquivo_3d) VALUES (?,?,?,?,?,?,?)",
+                      (self.a_id, self.data.get('nome_peca', ''), agora, self.data.get('tempo_impressao', ''), "Sucesso", self.data.get('preco_custo', 0), self.data.get('arquivo_3d', '')))
+            hist_id = c.lastrowid
 
             materiais = self.data.get('materiais', [])
             if materiais:
@@ -200,6 +201,8 @@ class AcervoCard(HorizontalInventoryCard):
                             "UPDATE filamentos SET peso_atual=?, rolos_reserva=?, status=? WHERE id=?",
                             (max(0, novo_peso), rolos_reserva, novo_status, f_id)
                         )
+                        c.execute("INSERT INTO hist_filamentos (hist_id, filamento_id, peso_modelo_g, peso_purga_g, peso_torre_g) VALUES (?,?,?,?,?)",
+                                  (hist_id, f_id, peso_gasto*1000, purga_por_material*1000, 0))
             conn.commit()
 
         app_state.load_acervo()
@@ -210,14 +213,16 @@ class AcervoCard(HorizontalInventoryCard):
         with db.get_connection() as conn:
             c = conn.cursor()
             row = c.execute(
-                "SELECT id FROM acervo_impressoes WHERE acervo_id=? ORDER BY id DESC LIMIT 1",
+                "SELECT id FROM hist_impressoes WHERE acervo_id=? ORDER BY id DESC LIMIT 1",
                 (self.a_id,)
             ).fetchone()
             if not row:
                 messagebox.showinfo("Info", "Nenhuma impressão registrada para reverter.")
                 return
             impressao_id = row[0]
-            c.execute("DELETE FROM acervo_impressoes WHERE id=?", (impressao_id,))
+            c.execute("DELETE FROM hist_filamentos WHERE hist_id=?", (impressao_id,))
+            c.execute("DELETE FROM hist_fotos WHERE hist_id=?", (impressao_id,))
+            c.execute("DELETE FROM hist_impressoes WHERE id=?", (impressao_id,))
 
             materiais = self.data.get('materiais', [])
             if materiais:
@@ -350,6 +355,9 @@ class TabAcervo(ctk.CTkFrame):
         self.list_frame = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.list_frame.pack(side="top", fill="both", expand=True, padx=20, pady=10)
         self.cards = {}
+        self._current_page = 1
+        self._page_size = 20
+        self._load_more_frame = None
 
         app_state.subscribe('acervo', self._on_state_change)
         app_state.subscribe('filamentos', self._on_filamentos_change)
@@ -528,8 +536,31 @@ class TabAcervo(ctk.CTkFrame):
         for w in self.cards.values():
             w.destroy()
         self.cards = {}
-        for data in app_state.acervo:
-            self._add_card(data)
+        self._current_page = 1
+        if getattr(self, '_load_more_frame', None) and self._load_more_frame.winfo_exists():
+            self._load_more_frame.destroy()
+        self._render_page()
+
+    def _render_page(self):
+        if getattr(self, '_load_more_frame', None) and self._load_more_frame.winfo_exists():
+            self._load_more_frame.destroy()
+            
+        start_idx = (self._current_page - 1) * self._page_size
+        end_idx = start_idx + self._page_size
+        page_data = app_state.acervo[start_idx:end_idx]
+
+        for data in page_data:
+            if data['id'] not in self.cards:
+                self._add_card(data)
+                
+        if end_idx < len(app_state.acervo):
+            self._load_more_frame = ctk.CTkFrame(self.list_frame, fg_color="transparent")
+            self._load_more_frame.pack(fill="x", pady=10)
+            ctk.CTkButton(self._load_more_frame, text="Carregar Mais", command=self._load_next_page, fg_color="#2a2a4a", hover_color="#3a3a6a").pack()
+
+    def _load_next_page(self):
+        self._current_page += 1
+        self._render_page()
 
     def _add_card(self, data):
         card = AcervoCard(self.list_frame, data)

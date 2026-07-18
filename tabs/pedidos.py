@@ -483,6 +483,12 @@ class TabPedidos(ctk.CTkFrame):
         self.col_encaminhado = self._make_col(2, "Pronto / Encaminhado", "#162e21")
 
         self.cards = {}
+        self._current_page = 1
+        self._page_size = 30
+        
+        self.btn_load_more_kanban = ctk.CTkButton(self, text="Carregar Mais Pedidos", command=self._load_next_page, fg_color="#2a2a4a", hover_color="#3a3a6a")
+        # will pack it in _on_state_change if needed
+
         app_state.subscribe('pedidos', self._on_state_change)
         app_state.subscribe('acervo', self._update_acervo_combo)
         app_state.load_pedidos()
@@ -617,7 +623,16 @@ class TabPedidos(ctk.CTkFrame):
         self._toggle_form()
         app_state.load_pedidos()
 
+    def _load_next_page(self):
+        self._current_page += 1
+        self._on_state_change()
+
     def _on_state_change(self, event=None):
+        if event and event.get('action') in ('add', 'update', 'remove'):
+            # Se for um evento isolado, podemos só atualizar ele
+            # Mas para garantir a ordem, recarregamos normal
+            pass
+            
         current_data = {p['id']: p for p in app_state.pedidos}
         
         for pid in list(self.cards.keys()):
@@ -625,7 +640,11 @@ class TabPedidos(ctk.CTkFrame):
                 self.cards[pid].destroy()
                 del self.cards[pid]
                 
-        for pid, data in current_data.items():
+        limit = self._current_page * self._page_size
+        items = app_state.pedidos[:limit]
+                
+        for data in items:
+            pid = data['id']
             if pid in self.cards:
                 card = self.cards[pid]
                 if card.status != data.get('status', 'A Fazer'):
@@ -635,6 +654,18 @@ class TabPedidos(ctk.CTkFrame):
                     card.update_data(data)
             else:
                 self._add_card(data)
+                
+        # Remova cartas extras se o _page_size encolher (improvável a não ser clear)
+        loaded_pids = {data['id'] for data in items}
+        for pid in list(self.cards.keys()):
+            if pid not in loaded_pids:
+                self.cards[pid].destroy()
+                del self.cards[pid]
+
+        if len(app_state.pedidos) <= limit:
+            self.btn_load_more_kanban.pack_forget()
+        else:
+            self.btn_load_more_kanban.pack(side="bottom", pady=10)
 
     def _add_card(self, data):
         status = data.get('status', 'A Fazer')

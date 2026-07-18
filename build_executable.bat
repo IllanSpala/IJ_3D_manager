@@ -39,7 +39,7 @@ if errorlevel 1 (
 
 REM -- 3. Locate CustomTkinter assets ----------------------------------
 echo [3/4] Locating CustomTkinter package...
-for /f "delims=" %%i in ('python -c "import customtkinter; print(customtkinter.__path__[0])"') do (
+for /f "delims=" %%i in ('python -c "import customtkinter; print(customtkinter.__path__[0])" 2^>nul ^| py -c "import customtkinter; print(customtkinter.__path__[0])" 2^>nul') do (
     set CTK_PATH=%%i
 )
 if "!CTK_PATH!"=="" (
