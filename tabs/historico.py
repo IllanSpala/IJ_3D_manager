@@ -355,9 +355,6 @@ class _DetalhesHistoricoModal(ctk.CTkToplevel):
         self.data_var.set(datetime.datetime.now().strftime("%Y-%m-%d"))
         self.tempo_var.set("")
         self.status_var.set("Sucesso")
-        self.preco_var.set("")
-        self.conf_var.set("")
-        self.arq_var.set("")
         self.obs_txt.delete("1.0", "end")
         for r in self.fil_rows: r.destroy()
         self.fil_rows = []
