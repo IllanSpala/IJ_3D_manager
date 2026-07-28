@@ -27,7 +27,7 @@ def _migrate_old_pedidos():
                         nome = row.get('nome_cliente', 'Cliente Desconhecido')
                         data = row.get('data_entrega', '')
                         valor = row.get('valor_cobrado', row.get('valor', 0.0)) 
-                        status = row.get('status', 'A Fazer')
+                        status = row.get('status', 'A MODELAR')
                         
                         c.execute('''INSERT INTO pedidos_v2 
                                      (id, nome_cliente, data_entrega, valor_cobrado, status, plataforma_venda) 
@@ -67,7 +67,7 @@ class EditarPedidoModal(ctk.CTkToplevel):
         self.data_var = ctk.StringVar(value=data.get('data_entrega', ''))
         val_cobrado = float(data.get('valor_cobrado', 0.0))
         self.valor_var = ctk.StringVar(value=f"{val_cobrado:.2f}")
-        self.status_var = ctk.StringVar(value=data.get('status', 'A Fazer'))
+        self.status_var = ctk.StringVar(value=data.get('status', 'A MODELAR'))
         self.plat_var = ctk.StringVar(value=data.get('plataforma_venda', 'Direto'))
 
         # Botões de ação do Modal (Fixos na parte inferior, pacotados primeiro para não sumirem)
@@ -99,7 +99,7 @@ class EditarPedidoModal(ctk.CTkToplevel):
         field(f_dados, "Data de Entrega (YYYY-MM-DD)", self.data_var)
         field(f_dados, "Valor Cobrado (R$)", self.valor_var)
         field(f_dados, "Plataforma", self.plat_var, is_option=True, options=["Shopee", "MercadoLivre", "OLX", "Direto"])
-        field(f_dados, "Status", self.status_var, is_option=True, options=["A Fazer", "Imprimindo", "Encaminhado", "Entregue"])
+        field(f_dados, "Status", self.status_var, is_option=True, options=["A MODELAR", "A IMPRIMIR", "IMPRESSO/PINTANDO", "ENVIANDO/CONCLUIDO"])
 
         # ─── Seção 2: Gerenciamento de Itens ───
         ctk.CTkLabel(self.scroll, text="Itens do Pedido", font=ctk.CTkFont(weight="bold", size=14)).pack(anchor="w", padx=15, pady=(15, 5))
@@ -259,7 +259,7 @@ class PedidoCard(ModernCard):
     def __init__(self, master, data, **kwargs):
         self.p_id = data['id']
         self.data = data
-        self.status = data.get('status', 'A Fazer')
+        self.status = data.get('status', 'A MODELAR')
         
         b_color, f_color = self._get_priority_colors(data.get('data_entrega'), self.status)
         
@@ -325,15 +325,23 @@ class PedidoCard(ModernCard):
         btns.pack(fill="x")
         
         btn_font = ctk.CTkFont(size=11, weight="bold")
-        if self.status in ("Imprimindo", "Encaminhado", "Entregue"):
-            prev = {"Imprimindo": "A Fazer", "Encaminhado": "Imprimindo", "Entregue": "Encaminhado"}[self.status]
-            ctk.CTkButton(btns, text="◀ Ant", height=24, fg_color="#2a2a2a", hover_color="#444", text_color="#aaa", font=btn_font, command=lambda s=prev: self._move(s)).pack(side="left", expand=True, fill="x", padx=(0, 2))
+        STATUS_ORDER = ["A MODELAR", "A IMPRIMIR", "IMPRESSO/PINTANDO", "ENVIANDO/CONCLUIDO"]
+        status_map = {
+            "A Fazer": "A MODELAR",
+            "Imprimindo": "A IMPRIMIR",
+            "Encaminhado": "ENVIANDO/CONCLUIDO",
+            "Entregue": "ENVIANDO/CONCLUIDO",
+        }
+        norm_status = status_map.get(self.status, self.status)
+        idx = STATUS_ORDER.index(norm_status) if norm_status in STATUS_ORDER else 0
+
+        if idx > 0:
+            prev_status = STATUS_ORDER[idx - 1]
+            ctk.CTkButton(btns, text="◀ Ant", height=24, fg_color="#2a2a2a", hover_color="#444", text_color="#aaa", font=btn_font, command=lambda s=prev_status: self._move(s)).pack(side="left", expand=True, fill="x", padx=(0, 2))
             
-        if self.status in ("A Fazer", "Imprimindo"):
-            nxt = "Imprimindo" if self.status == "A Fazer" else "Encaminhado"
-            ctk.CTkButton(btns, text="Próx ▶", height=24, fg_color="#2a2a2a", hover_color="#444", text_color="#aaa", font=btn_font, command=lambda s=nxt: self._move(s)).pack(side="right", expand=True, fill="x", padx=(2, 0))
-        elif self.status == "Encaminhado":
-            ctk.CTkButton(btns, text="✔ Fim", height=24, fg_color="#2b7a4b", hover_color="#1d5c36", text_color="white", font=btn_font, command=lambda: self._move("Entregue")).pack(side="right", expand=True, fill="x", padx=(2, 0))
+        if idx < len(STATUS_ORDER) - 1:
+            next_status = STATUS_ORDER[idx + 1]
+            ctk.CTkButton(btns, text="Próx ▶", height=24, fg_color="#2a2a2a", hover_color="#444", text_color="#aaa", font=btn_font, command=lambda s=next_status: self._move(s)).pack(side="right", expand=True, fill="x", padx=(2, 0))
 
     def _open_edit_modal(self):
         EditarPedidoModal(self.winfo_toplevel(), self.p_id, self.data)
@@ -352,9 +360,10 @@ class PedidoCard(ModernCard):
         return d_str
 
     def _get_priority_colors(self, data_entrega_str, status):
-        if status == "A Fazer": return "#d64545", "#181414"
-        if status == "Imprimindo": return "#d97706", "#1a1612"
-        if status in ("Encaminhado", "Entregue"): return "#10b981", "#121815"
+        if status in ("A MODELAR", "A Fazer"): return "#d64545", "#181414"
+        if status == "A IMPRIMIR": return "#3b82f6", "#12161f"
+        if status in ("IMPRESSO/PINTANDO", "Imprimindo"): return "#d97706", "#1a1612"
+        if status in ("ENVIANDO/CONCLUIDO", "Encaminhado", "Entregue"): return "#10b981", "#121815"
         return "#555555", "#161616"
 
     def _make_saver(self, field):
@@ -475,12 +484,13 @@ class TabPedidos(ctk.CTkFrame):
 
         self.kanban = ctk.CTkFrame(self, fg_color="transparent")
         self.kanban.pack(side="top", fill="both", expand=True, padx=15, pady=10)
-        self.kanban.grid_columnconfigure((0, 1, 2), weight=1, uniform="col")
+        self.kanban.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="col")
         self.kanban.grid_rowconfigure(0, weight=1)
 
-        self.col_fazer = self._make_col(0, "A Fazer", "#1a1a2e")
-        self.col_imp = self._make_col(1, "Imprimindo", "#2e2116")
-        self.col_encaminhado = self._make_col(2, "Pronto / Encaminhado", "#162e21")
+        self.col_modelar = self._make_col(0, "A MODELAR", "#2e1a2e")
+        self.col_imprimir = self._make_col(1, "A IMPRIMIR", "#1a2a3e")
+        self.col_impresso = self._make_col(2, "IMPRESSO/PINTANDO", "#2e2116")
+        self.col_concluido = self._make_col(3, "ENVIANDO/CONCLUIDO", "#162e21")
 
         self.cards = {}
         self._current_page = 1
@@ -598,7 +608,7 @@ class TabPedidos(ctk.CTkFrame):
         with db.get_connection() as conn:
             c = conn.cursor()
             c.execute("INSERT INTO pedidos_v2 (nome_cliente, data_entrega, valor_cobrado, status, plataforma_venda) VALUES (?,?,?,?,?)",
-                      (self.cliente_var.get(), self.data_var.get(), v, "A Fazer", self.plataforma_var.get()))
+                      (self.cliente_var.get(), self.data_var.get(), v, "A MODELAR", self.plataforma_var.get()))
             pid = c.lastrowid
             
             if not self.pecas_selecionadas and desc:
@@ -647,7 +657,7 @@ class TabPedidos(ctk.CTkFrame):
             pid = data['id']
             if pid in self.cards:
                 card = self.cards[pid]
-                if card.status != data.get('status', 'A Fazer'):
+                if card.status != data.get('status', 'A MODELAR'):
                     card.destroy()
                     self._add_card(data)
                 else:
@@ -668,11 +678,16 @@ class TabPedidos(ctk.CTkFrame):
             self.btn_load_more_kanban.pack(side="bottom", pady=10)
 
     def _add_card(self, data):
-        status = data.get('status', 'A Fazer')
+        status = data.get('status', 'A MODELAR')
         
-        if status == "Imprimindo": parent = self.col_imp
-        elif status in ("Encaminhado", "Entregue"): parent = self.col_encaminhado
-        else: parent = self.col_fazer
+        if status in ("A IMPRIMIR",):
+            parent = self.col_imprimir
+        elif status in ("IMPRESSO/PINTANDO", "Imprimindo"):
+            parent = self.col_impresso
+        elif status in ("ENVIANDO/CONCLUIDO", "Encaminhado", "Entregue"):
+            parent = self.col_concluido
+        else:
+            parent = self.col_modelar
         
         card = PedidoCard(parent, data)
         card.pack(fill="x", padx=6, pady=6)
